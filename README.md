@@ -119,6 +119,9 @@ jobs:
 GitHub workflow to keep check deployed version (passed in `url` input with combination of `jq` input) until it matches
 helm chart (`Chart.yml`) version.
 
+`jq` is automatically quoted, do not include surrounding single quotes. For example instead of `'.service.version'`
+use `.service.version`.
+
 ### inputs
 
 | input     | default  | description                                         |
