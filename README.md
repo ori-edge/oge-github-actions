@@ -48,3 +48,22 @@ jobs:
       REGISTRY_USERNAME: ${{ secrets.REGISTRY_USERNAME }}
       REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
 ```
+
+## tag
+GitHub workflow to create git tag, with the same name as chart version. Workflow creates two tags, one is just the
+chart version the other one is the chart version, but prefixed with `v` (this satisfies go dependency naming convention).
+
+### inputs
+
+| input          | default  | description                                         |
+|----------------|----------|-----------------------------------------------------|
+| chartPath      | N/A      | helm Chart.yaml path e.g. charts/yourapp/Chart.yaml |
+
+### workflow example
+```yaml
+jobs:
+  docker-oge-api-gateway:
+    uses: ori-edge/oge-github-actions/.github/workflows/tag.yml@main
+    with:
+      chartPath: "charts/example-app/Chart.yaml"
+```
