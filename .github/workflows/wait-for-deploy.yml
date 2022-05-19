@@ -1,0 +1,50 @@
+name: Wait for deploy
+
+on:
+  workflow_call:
+    inputs:
+      chartPath:
+        description: "helm Chart.yaml path e.g. charts/yourapp/Chart.yaml"
+        required: true
+        type: string
+      url:
+        description: "url to get currently deployed version"
+        required: true
+        type: string
+      jq:
+        description: "jq pattern to extract deployed version"
+        required: false
+        default: ".version"
+        type: string
+
+jobs:
+  wait-for-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+
+      - name: Get helm chart version
+        run: echo "CHART_VERSION=$(grep '^version:' ${{ inputs.chartPath }} | cut -d ":" -f2 | tr -d ' ')" >> $GITHUB_ENV
+
+      - name: Wait for deploy
+        run: |
+          TAG=${{ env.CHART_VERSION }}  
+          for i in $(seq 1 10)
+          do       
+            VERSION=$(curl -s ${{ inputs.url }} | jq ${{ inputs.jq }} | tr -d '"')
+            sleep 60
+            if [[ $VERSION == $TAG ]]
+            then 
+               echo "$VERSION is released"
+               break
+            elif [[ i -eq 10 ]]
+            then 
+               echo "$TAG has not been deployed"
+               exit 1
+            else 
+                echo "$VERSION is currently deployed, waiting for $TAG"
+            fi
+          done
