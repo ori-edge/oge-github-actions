@@ -83,3 +83,30 @@ jobs:
   docker-oge-api-gateway:
     uses: ori-edge/oge-github-actions/.github/workflows/docker-scan.yml@main
 ```
+
+## gcp-helm-charts
+GitHub workflow to build helm charts and push to gcp. All helm charts are expected to live in `./charts` directory.
+
+### inputs
+
+| input          | default  | description                                             |
+|----------------|----------|---------------------------------------------------------|
+| chartPath      | N/A      | helm Chart.yaml path e.g. charts/yourapp/Chart.yaml     |
+| gcpDestination | N/A      | gcp directory where the packaged chart will be uploaded |
+
+### secrets
+| input              | default  | description     |
+|--------------------|----------|-----------------|
+| GCP_CREDENTIALS    | N/A      | gcp credentials |
+
+### workflow example
+```yaml
+jobs:
+  docker-oge-api-gateway:
+    uses: ori-edge/oge-github-actions/.github/workflows/gcp-helm-charts.yml@main
+    with:
+      chartPath: "charts/example-app/Chart.yaml"
+      gcpDestination: "helm-charts"
+    secrets:
+      GCP_CREDENTIALS: ${{ secrets.GCP_CREDENTIALS }}
+```
