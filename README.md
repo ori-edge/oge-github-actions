@@ -15,12 +15,30 @@ on:
       - "<path to Chart.yaml>"
 ```
 
+## tag
+GitHub workflow to create git tag, with the same name as chart version. Workflow creates two tags, one is just the
+chart version the other one is the chart version, but prefixed with `v` (this satisfies go dependency naming convention).
+
+### inputs
+
+| input          | default  | description                                         |
+|----------------|----------|-----------------------------------------------------|
+| chartPath      | N/A      | helm Chart.yaml path e.g. charts/yourapp/Chart.yaml |
+
+### workflow example
+```yaml
+jobs:
+  docker-oge-api-gateway:
+    uses: ori-edge/oge-github-actions/.github/workflows/tag.yml@main
+    with:
+      chartPath: "charts/example-app/Chart.yaml"
+```
 
 ## docker
 GitHub workflow to build and push docker image. Workflow also passes `--build-arg version=<chart-version>` argument set
 to chart version. This allows dynamically inject built version to your application.
 
-### inputs 
+### inputs
 
 | input          | default  | description                                         |
 |----------------|----------|-----------------------------------------------------|
@@ -28,7 +46,7 @@ to chart version. This allows dynamically inject built version to your applicati
 | dockerRegistry | quay.io  | name of the docker registry                         |
 | dockerRepo     | oriedge  | name of the docker repository                       |
 | imageName      | N/A      | name of the docker image to be built                |
-| buildContext   | .        | docker build context in case Dockerfile             |
+| buildContext   | .        | docker build context                                |
 
 ### secrets
 | input              | default  | description              |
@@ -49,21 +67,19 @@ jobs:
       REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
 ```
 
-## tag
-GitHub workflow to create git tag, with the same name as chart version. Workflow creates two tags, one is just the
-chart version the other one is the chart version, but prefixed with `v` (this satisfies go dependency naming convention).
+## docker-scan
+GitHub workflow to scan docker image using [trivy](https://github.com/aquasecurity/trivy) scanner. This workflow is not
+dependent on `Chart.yaml` version and can be run without updating chart (as part of pull request etc.).
 
 ### inputs
 
-| input          | default  | description                                         |
-|----------------|----------|-----------------------------------------------------|
-| chartPath      | N/A      | helm Chart.yaml path e.g. charts/yourapp/Chart.yaml |
+| input          | default  | description                      |
+|----------------|----------|----------------------------------|
+| buildContext   | .        | docker build context             |
 
 ### workflow example
 ```yaml
 jobs:
   docker-oge-api-gateway:
-    uses: ori-edge/oge-github-actions/.github/workflows/tag.yml@main
-    with:
-      chartPath: "charts/example-app/Chart.yaml"
+    uses: ori-edge/oge-github-actions/.github/workflows/docker-scan.yml@main
 ```

@@ -22,7 +22,7 @@ on:
         required: true
         type: string
       buildContext:
-        description: "docker build context in case Dockerfile"
+        description: "docker build context"
         default: "."
         required: false
         type: string
