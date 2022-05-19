@@ -9,13 +9,13 @@ on:
         type: string
       dockerRegistry:
         description: "name of the docker registry"
+        required: false
         default: "quay.io"
-        required: true
         type: string
       dockerRepo:
         description: "name of the docker repository"
+        required: false
         default: "oriedge"
-        required: true
         type: string
       imageName:
         description: "name of the docker image to be built"
@@ -24,7 +24,7 @@ on:
       buildContext:
         description: "docker build context in case Dockerfile"
         default: "."
-        required: true
+        required: false
         type: string
     secrets:
       REGISTRY_USERNAME:
@@ -66,4 +66,4 @@ jobs:
           build-args: version=${{ env.CHART_VERSION }}
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: ${{ inputs.dockerRegistry }}/${{ .inputs.dockerRepo }}/${{ inputs.imageName }}:${{ env.CHART_VERSION }}
+          tags: ${{ inputs.dockerRegistry }}/${{ inputs.dockerRepo }}/${{ inputs.imageName }}:${{ env.CHART_VERSION }}
