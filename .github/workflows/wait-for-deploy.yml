@@ -34,7 +34,7 @@ jobs:
           TAG=${{ env.CHART_VERSION }}  
           for i in $(seq 1 10)
           do       
-            VERSION=$(curl -s ${{ inputs.url }} | jq ${{ inputs.jq }} | tr -d '"')
+            VERSION=$(curl -s ${{ inputs.url }} | jq '${{ inputs.jq }}' | tr -d '"')
             sleep 60
             if [[ $VERSION == $TAG ]]
             then 
