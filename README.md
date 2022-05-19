@@ -17,7 +17,7 @@ on:
 
 Workflows can either use `main` branch as a version e.g. `ori-edge/oge-github-actions/.github/workflows/tag.yml@main` if
 you want to get always the latest version, or you can specify a specific tag e.g.
-`ori-edge/oge-github-actions/.github/workflows/tag.yml@v0.1.0`.
+`ori-edge/oge-github-actions/.github/workflows/tag.yml@v0.2.0`.
 
 ## tag
 GitHub workflow to create git tag, with the same name as chart version. Workflow creates two tags, one is just the
