@@ -71,6 +71,24 @@ jobs:
       REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
 ```
 
+## docker-branch
+This workflow is the same as the `docker` workflow however builds an image using
+a tag unique to the current branch instead of using the chart version, so it can
+be run in CI without overwriting images tagged with the chart version.
+
+### workflow example
+```yaml
+jobs:
+  docker:
+    uses: ori-edge/oge-github-actions/.github/workflows/docker-branch.yml@main
+    with:
+      chartPath: "charts/example-app/Chart.yaml"
+      imageName: example-app
+    secrets:
+      REGISTRY_USERNAME: ${{ secrets.REGISTRY_USERNAME }}
+      REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
+```
+
 ## docker-scan
 GitHub workflow to scan docker image using [trivy](https://github.com/aquasecurity/trivy) scanner. This workflow is not
 dependent on `Chart.yaml` version and can be run without updating chart (as part of pull request etc.).
