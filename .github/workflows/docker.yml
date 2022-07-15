@@ -77,25 +77,25 @@ jobs:
           password: ${{ secrets.REGISTRY_PASSWORD }}
 
       - name: Generate image version (CUSTOM)
-        if: ${{ inputs.dockerImageMode == "custom" }}
+        if: ${{ inputs.dockerImageMode == 'custom' }}
         run: |
           echo "IMAGE_VERSION=${{ inputs.dockerImage }}" >> $GITHUB_ENV
 
       - name: Generate image version (CHART_REF)
-        if: ${{ inputs.dockerImageMode == "chart_ref" }}
+        if: ${{ inputs.dockerImageMode == 'chart_ref' }}
         run: |
           echo "CHART_PATH=${{ inputs.chartPath }}"
           export IMAGE_VERSION=$(grep '^version:' ${{ inputs.chartPath }} | cut -d ":" -f2 | tr -d ' ')
           echo "IMAGE_VERSION=${{ IMAGE_VERSION }}" >> $GITHUB_ENV
 
       - name: Generate image version (BRANCH_REF)
-        if: ${{ inputs.dockerImageMode == "branch_ref" }}
+        if: ${{ inputs.dockerImageMode == 'branch_ref' }}
         run: |
           export IMAGE_VERSION=$(echo ${GITHUB_REF#refs/heads/} | sed 's/\//_/g')
           echo "IMAGE_VERSION=${{ IMAGE_VERSION }}" >> $GITHUB_ENV
 
       - name: Validate image version
-        if: ${{ env.IMAGE_VERSION == "" }}
+        if: ${{ env.IMAGE_VERSION == '' }}
         run: |
           echo "[debug] inputs.dockerImageMode: ${{ inputs.dockerImageMode }}"
           echo "[debug] inputs.dockerImage: ${{ inputs.dockerImage }}"
