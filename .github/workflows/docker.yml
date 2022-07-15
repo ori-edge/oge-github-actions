@@ -4,7 +4,7 @@ on:
   workflow_call:
     inputs:
       chartPath:
-        description: "helm Chart.yaml path e.g. charts/yourapp/Chart.yaml (used to generate imageVersion variable in chart_version mode)"
+        description: "helm Chart.yaml path e.g. charts/yourapp/Chart.yaml (used by dockerImageMode 'chart_ref')"
         required: false
         type: string
       dockerRegistry:
@@ -23,7 +23,7 @@ on:
         default: ""
         type: string
       dockerImageMode:
-        description: "mode from which the docker image should be created from (custom, chart_version, branch_ref)"
+        description: "mode from which the docker image should be created from (custom, branch_ref, chart_ref)"
         required: false
         default: "chart_version"
         type: string
@@ -42,7 +42,7 @@ on:
         required: false
         type: string
       push:
-        description: ""
+        description: "the flag indicating if the image should be pushed to the registry or not"
         default: true
         required: false
         type: boolean
@@ -59,18 +59,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           fetch-depth: 0
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v1
+        uses: docker/setup-qemu-action@v2
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v1
+        uses: docker/setup-buildx-action@v2
 
       - name: Login to quay.io Container Registry
-        uses: docker/login-action@v1
+        uses: docker/login-action@v2
         with:
           registry: ${{ inputs.dockerRegistry }}
           username: ${{ secrets.REGISTRY_USERNAME }}
@@ -79,21 +79,24 @@ jobs:
       - name: Generate image version (CUSTOM)
         if: ${{ inputs.dockerImageMode == 'custom' }}
         run: |
-          echo "IMAGE_VERSION=${{ inputs.dockerImage }}" >> $GITHUB_ENV
+          IMAGE_VERSION=${{ inputs.dockerImage }}
           echo "IMAGE_VERSION=${{ env.IMAGE_VERSION }}"
+          echo "IMAGE_VERSION=${{ env.IMAGE_VERSION }}" >> $GITHUB_ENV
 
       - name: Generate image version (CHART_REF)
         if: ${{ inputs.dockerImageMode == 'chart_ref' }}
         run: |
+          IMAGE_VERSION=$(grep '^version:' ${{ inputs.chartPath }} | cut -d ":" -f2 | tr -d ' ')
           echo "CHART_PATH=${{ inputs.chartPath }}"
-          echo "IMAGE_VERSION=$(grep '^version:' ${{ inputs.chartPath }} | cut -d ":" -f2 | tr -d ' ')" >> $GITHUB_ENV
           echo "IMAGE_VERSION=${{ env.IMAGE_VERSION }}"
+          echo "IMAGE_VERSION=${{ env.IMAGE_VERSION }}" >> $GITHUB_ENV
 
       - name: Generate image version (BRANCH_REF)
         if: ${{ inputs.dockerImageMode == 'branch_ref' }}
         run: |
-          echo "IMAGE_VERSION=$(echo ${GITHUB_REF#refs/heads/} | sed 's/\//_/g')" >> $GITHUB_ENV
+          IMAGE_VERSION=$(echo ${GITHUB_REF#refs/heads/} | sed 's/\//_/g')
           echo "IMAGE_VERSION=${{ env.IMAGE_VERSION }}"
+          echo "IMAGE_VERSION=${{ env.IMAGE_VERSION }}" >> $GITHUB_ENV
 
       - name: Validate image version
         if: ${{ env.IMAGE_VERSION == '' }}
@@ -105,7 +108,7 @@ jobs:
           exit 1
 
       - name: Build and push image
-        uses: docker/build-push-action@v2
+        uses: docker/build-push-action@v3
         with:
           context: ${{ inputs.buildContext }}
           build-args: version=${{ env.IMAGE_VERSION }}
