@@ -17,19 +17,19 @@ on:
         required: false
         default: "oriedge"
         type: string
-      dockerImage:
-        description: "name of the docker image (over-rides generated image names)"
-        required: false
-        default: ""
-        type: string
       dockerImageMode:
-        description: "mode from which the docker image should be created from (custom, branch_ref, chart_ref)"
+        description: "mode from which the docker image should be created from (branch_ref, chart_ref)"
         required: false
         default: "chart_ref"
         type: string
       imageName:
-        description: "name of the docker image to be built"
+        description: "name of the docker image to be built ({repo}/{name}:{version})"
         required: true
+        type: string
+      imageVersion:
+        description: "version of the docker image to be built ({repo}/{name}:{version})"
+        required: false
+        default: ""
         type: string
       buildContext:
         description: "docker build context"
@@ -37,7 +37,7 @@ on:
         required: false
         type: string
       platforms:
-        description: "the list of platforms/architectures to created images for"
+        description: "the list of platforms/architectures to create docker images for"
         default: "linux/amd64,linux/arm64"
         required: false
         type: string
@@ -76,17 +76,10 @@ jobs:
           username: ${{ secrets.REGISTRY_USERNAME }}
           password: ${{ secrets.REGISTRY_PASSWORD }}
 
-      - name: Generate image version (CUSTOM)
-        if: ${{ inputs.dockerImageMode == 'custom' }}
-        run: |
-          IMAGE_VERSION="${{ inputs.dockerImage }}"
-          echo "IMAGE_VERSION=${IMAGE_VERSION}"
-          echo "IMAGE_VERSION=${IMAGE_VERSION}" >> $GITHUB_ENV
-
       - name: Generate image version (CHART_REF)
         if: ${{ inputs.dockerImageMode == 'chart_ref' }}
         run: |
-          if [[ -z ${{ inputs.chartPath }} ]]; then
+          if [[ -z "${{ inputs.chartPath }}" ]]; then
             echo "inputs.chartPath must be set in dockerImageMode 'chart_ref'"
             exit 1
           fi
@@ -99,6 +92,13 @@ jobs:
         if: ${{ inputs.dockerImageMode == 'branch_ref' }}
         run: |
           IMAGE_VERSION=$(echo ${GITHUB_REF#refs/heads/} | sed 's/\//_/g')
+          echo "IMAGE_VERSION=${IMAGE_VERSION}"
+          echo "IMAGE_VERSION=${IMAGE_VERSION}" >> $GITHUB_ENV
+
+      - name: Generate image version (CUSTOM)
+        if: ${{ inputs.imageVersion != '' }}
+        run: |
+          IMAGE_VERSION="${{ inputs.imageVersion }}"
           echo "IMAGE_VERSION=${IMAGE_VERSION}"
           echo "IMAGE_VERSION=${IMAGE_VERSION}" >> $GITHUB_ENV
 
