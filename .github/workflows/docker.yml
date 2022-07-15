@@ -76,32 +76,32 @@ jobs:
           username: ${{ secrets.REGISTRY_USERNAME }}
           password: ${{ secrets.REGISTRY_PASSWORD }}
 
-      - name: Build docker image version
-        shell: bash
+      - name: Generate image version (CUSTOM)
+        if: ${{ inputs.dockerImageMode == "custom" }}
         run: |
-          echo "[debug] dockerImage: ${{ inputs.dockerImage }}"
-          echo "[debug] dockerImageMode: ${{ inputs.dockerImageMode }}"
-          echo "[debug] chartPath: ${{ inputs.chartPath }}"
-          if [ -z "${{ inputs.dockerImage }}" ]
-          then
-            export IMAGE_VERSION="${{ inputs.dockerImage }}"
-          else if [ "${{ inputs.dockerImageMode }}" = "chart_version" ] && [ ! -z "${{ inputs.chartPath }}" ]
-          then
-            export IMAGE_VERSION=$(grep '^version:' ${{ inputs.chartPath }} | cut -d ":" -f2 | tr -d ' ')
-          else if [ "${{ inputs.dockerImageMode }}" =  "branch_ref" ]
-          then
-            export IMAGE_VERSION=$(echo ${GITHUB_REF#refs/heads/} | sed 's/\//_/g')
-          else
-            echo "Invalid IMAGE_VERSION configuration"
-            exit 1
-          fi
-          echo "[debug] IMAGE_VERSION=${{ IMAGE_VERSION }}"
-          if [ -z "${{ IMAGE_VERSION }}" ]
-          then
-            echo "[error] image version is empty"
-            exit 1
-          fi
+          echo "IMAGE_VERSION=${{ inputs.dockerImage }}" >> $GITHUB_ENV
+
+      - name: Generate image version (CHART_REF)
+        if: ${{ inputs.dockerImageMode == "chart_ref" }}
+        run: |
+          echo "CHART_PATH=${{ inputs.chartPath }}"
+          export IMAGE_VERSION=$(grep '^version:' ${{ inputs.chartPath }} | cut -d ":" -f2 | tr -d ' ')
           echo "IMAGE_VERSION=${{ IMAGE_VERSION }}" >> $GITHUB_ENV
+
+      - name: Generate image version (BRANCH_REF)
+        if: ${{ inputs.dockerImageMode == "branch_ref" }}
+        run: |
+          export IMAGE_VERSION=$(echo ${GITHUB_REF#refs/heads/} | sed 's/\//_/g')
+          echo "IMAGE_VERSION=${{ IMAGE_VERSION }}" >> $GITHUB_ENV
+
+      - name: Validate image version
+        if: ${{ env.IMAGE_VERSION == "" }}
+        run: |
+          echo "[debug] inputs.dockerImageMode: ${{ inputs.dockerImageMode }}"
+          echo "[debug] inputs.dockerImage: ${{ inputs.dockerImage }}"
+          echo "[debug] inputs.chartPath: ${{ inputs.chartPath }}"
+          echo "[error] env.IMAGE_VERSION is empty"
+          exit 1
 
       - name: Build and push image
         uses: docker/build-push-action@v2
