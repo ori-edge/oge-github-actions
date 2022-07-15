@@ -86,6 +86,10 @@ jobs:
       - name: Generate image version (CHART_REF)
         if: ${{ inputs.dockerImageMode == 'chart_ref' }}
         run: |
+          if [[ -z ${{ inputs.chartPath }} ]]; then
+            echo "inputs.chartPath must be set in dockerImageMode 'chart_ref'"
+            exit 1
+          fi
           IMAGE_VERSION=$(grep '^version:' ${{ inputs.chartPath }} | cut -d ":" -f2 | tr -d ' ')
           echo "CHART_PATH=${{ inputs.chartPath }}"
           echo "IMAGE_VERSION=${IMAGE_VERSION}"
