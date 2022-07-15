@@ -107,7 +107,7 @@ jobs:
         uses: docker/build-push-action@v2
         with:
           context: ${{ inputs.buildContext }}
-          build-args: version=${{ env.CHART_VERSION }}
+          build-args: version=${{ env.IMAGE_VERSION }}
           platforms: ${{ inputs.platforms }}
           push: ${{ inputs.push }}
           tags: ${{ inputs.dockerRegistry }}/${{ inputs.dockerRepo }}/${{ inputs.imageName }}:${{ env.IMAGE_VERSION }}
