@@ -3,6 +3,11 @@ name: Docker build and push
 on:
   workflow_call:
     inputs:
+      dockerImageMode:
+        description: "mode from which the docker image should be created from (branch_ref, chart_ref, custom)"
+        required: false
+        default: "chart_ref"
+        type: string
       chartPath:
         description: "helm Chart.yaml path e.g. charts/yourapp/Chart.yaml (used by dockerImageMode 'chart_ref')"
         required: false
@@ -17,17 +22,12 @@ on:
         required: false
         default: "oriedge"
         type: string
-      dockerImageMode:
-        description: "mode from which the docker image should be created from (branch_ref, chart_ref)"
-        required: false
-        default: "chart_ref"
-        type: string
       imageName:
         description: "name of the docker image to be built ({repo}/{name}:{version})"
         required: true
         type: string
       imageVersion:
-        description: "version of the docker image to be built ({repo}/{name}:{version})"
+        description: "version of the docker image to be built ({repo}/{name}:{version}) (Overrides image mode)"
         required: false
         default: ""
         type: string
