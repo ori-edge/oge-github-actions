@@ -25,7 +25,7 @@ on:
       dockerImageMode:
         description: "mode from which the docker image should be created from (custom, branch_ref, chart_ref)"
         required: false
-        default: "chart_version"
+        default: "chart_ref"
         type: string
       imageName:
         description: "name of the docker image to be built"
