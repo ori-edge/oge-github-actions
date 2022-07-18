@@ -106,7 +106,7 @@ jobs:
         if: ${{ env.IMAGE_VERSION == '' }}
         run: |
           echo "[debug] inputs.dockerImageMode: ${{ inputs.dockerImageMode }}"
-          echo "[debug] inputs.dockerImage: ${{ inputs.dockerImage }}"
+          echo "[debug] inputs.imageVersion: ${{ inputs.imageVersion }}"
           echo "[debug] inputs.chartPath: ${{ inputs.chartPath }}"
           echo "[error] env.IMAGE_VERSION is empty"
           exit 1
