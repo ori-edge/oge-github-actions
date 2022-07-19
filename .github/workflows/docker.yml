@@ -115,12 +115,19 @@ jobs:
 
       - name: Generate build args
         run: |
-          BUILD_ARGS=$(echo ${inputs.buildArgs} | sed 's/^ *//g')
-          if [[ ${BUILD_ARGS::1} != "|" ]]; then
-            BUILD_ARGS="|\n${BUILD_ARGS}"
+          BUILD_ARGS=$(echo "${{ inputs.buildArgs }}" | sed 's/^ *//g')
+          if [ -z "${BUILD_ARGS}" ]; then
+            BUILD_ARGS="|
+              version=${{ env.IMAGE_VERSION }}
+            "
+          else if [ "${BUILD_ARGS::1}" != "|" ]; then
+            BUILD_ARGS="|
+              ${BUILD_ARGS}
+              version=${{ env.IMAGE_VERSION }}
+            "
+          else
+            BUILD_ARGS+="\n version=${env.IMAGE_VERSION}"
           fi
-          BUILD_ARGS+="\n"
-          BUILD_ARGS+="version=${{ env.IMAGE_VERSION }}"
           echo "BUILD_ARGS=${BUILD_ARGS}"
           echo "BUILD_ARGS=${BUILD_ARGS}" >> $GITHUB_ENV
 
