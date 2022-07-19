@@ -117,7 +117,7 @@ jobs:
         run: |
           BUILD_ARGS="version=${{ env.IMAGE_VERSION }}"
           if [[ ! -z "${{ inputs.buildArgs }}" ]]; then
-            BUILD_ARGS+=",${{ inputs.buildArgs }}"
+            BUILD_ARGS="${{ inputs.buildArgs }}" 
           fi
           echo "BUILD_ARGS=${BUILD_ARGS}"
           echo "BUILD_ARGS=${BUILD_ARGS}" >> $GITHUB_ENV
