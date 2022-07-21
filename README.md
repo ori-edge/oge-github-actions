@@ -44,19 +44,19 @@ to chart version. This allows dynamically inject built version to your applicati
 
 ### inputs
 
-| input           | required | default                 | description                                                              |
-|-----------------|----------|-------------------------|--------------------------------------------------------------------------|
-| buildArgs       | false    |                         | docker build args (See --build-arg in docker docs)                       |
-| buildContext    | false    | .                       | docker build context                                                     |
-| chartPath       | false    |                         | helm Chart.yaml path e.g. charts/yourapp/Chart.yaml                      |
-| dockerFile      | false    |                         | the path to the Dockerfile to generate the image from                    |
-| dockerImageMode | false    | chart_ref               | how the imageVersion should be generated (chart_ref, branch_ref, custom) |
-| dockerRegistry  | false    | quay.io                 | name of the docker registry                                              |
-| dockerRepo      | false    | oriedge                 | name of the docker repository                                            |
-| imageName       | true     |                         | name of the docker image to be built                                     |
-| imageVersion    | false    |                         |                                                                          |  
-| platforms       | false    | linux/amd64,linux/arm64 | the list of platforms/architectures to compile the docker image against  |
-| push            | false    | true                    | flag to indicate if the generated docker image should be pushed or not   | 
+| input           | required | default                 | description                                                                        |
+|-----------------|----------|-------------------------|------------------------------------------------------------------------------------|
+| buildArgs       | false    |                         | docker build args (See --build-arg in docker docs)                                 |
+| buildContext    | false    | .                       | docker build context                                                               |
+| chartPath       | false    |                         | helm Chart.yaml path e.g. charts/yourapp/Chart.yaml                                |
+| dockerFile      | false    |                         | the path to the Dockerfile to generate the image from                              |
+| dockerImageMode | false    | chart_ref               | how the imageVersion should be generated (chart_ref, branch_ref, custom)           |
+| dockerRegistry  | false    | quay.io                 | name of the docker registry                                                        |
+| dockerRepo      | false    | oriedge                 | name of the docker repository                                                      |
+| imageName       | true     |                         | name of the docker image to be built                                               |
+| imageVersion    | false    |                         | over-ride image version ({dockerRegistry}/{dockerRepo}/{imageName}:{imageVersion}) |  
+| platforms       | false    | linux/amd64,linux/arm64 | the list of platforms/architectures to compile the docker image against            |
+| push            | false    | true                    | flag to indicate if the generated docker image should be pushed or not             | 
 
 ### secrets
 
