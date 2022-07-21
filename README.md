@@ -69,10 +69,11 @@ to chart version. This allows dynamically inject built version to your applicati
 ```yaml
 jobs:
   docker:
-    uses: ori-edge/oge-github-actions/.github/workflows/docker.yml@main
+    uses: ori-edge/oge-github-actions/.github/workflows/docker.yml@v0.3.0
     with:
-      chartPath: "charts/example-app/Chart.yaml"
+      dockerImageMode: branch_ref
       imageName: example-app
+      platforms: linux/amd64
     secrets:
       REGISTRY_USERNAME: ${{ secrets.REGISTRY_USERNAME }}
       REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
