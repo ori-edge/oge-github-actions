@@ -22,6 +22,11 @@ on:
         required: false
         default: "oriedge"
         type: string
+      dockerFile:
+        description: "path to the Dockerfile"
+        required: false
+        default: ""
+        type: string
       imageName:
         description: "name of the docker image to be built ({repo}/{name}:{version})"
         required: true
@@ -123,6 +128,7 @@ jobs:
         uses: docker/build-push-action@v3
         with:
           context: ${{ inputs.buildContext }}
+          file: ${{ inputs.dockerFile }}
           build-args: ${{ env.BUILD_ARGS }}
           platforms: ${{ inputs.platforms }}
           push: ${{ inputs.push }}
