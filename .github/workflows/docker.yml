@@ -3,14 +3,29 @@ name: Docker build and push
 on:
   workflow_call:
     inputs:
-      dockerImageMode:
-        description: "mode from which the docker image should be created from (branch_ref, chart_ref, custom)"
+      buildArgs:
+        description: "docker build args (see --build-arg in docker docs)"
+        default: ""
         required: false
-        default: "chart_ref"
+        type: string
+      buildContext:
+        description: "docker build context"
+        default: "."
+        required: false
         type: string
       chartPath:
         description: "helm Chart.yaml path e.g. charts/yourapp/Chart.yaml (used by dockerImageMode 'chart_ref')"
         required: false
+        type: string
+      dockerFile:
+        description: "path to the Dockerfile"
+        required: false
+        default: ""
+        type: string
+      dockerImageMode:
+        description: "mode from which the docker image should be created from (branch_ref, chart_ref, custom)"
+        required: false
+        default: "chart_ref"
         type: string
       dockerRegistry:
         description: "name of the docker registry"
@@ -22,11 +37,6 @@ on:
         required: false
         default: "oriedge"
         type: string
-      dockerFile:
-        description: "path to the Dockerfile"
-        required: false
-        default: ""
-        type: string
       imageName:
         description: "name of the docker image to be built ({repo}/{name}:{version})"
         required: true
@@ -35,16 +45,6 @@ on:
         description: "version of the docker image to be built ({repo}/{name}:{version}) (Overrides image mode)"
         required: false
         default: ""
-        type: string
-      buildContext:
-        description: "docker build context"
-        default: "."
-        required: false
-        type: string
-      buildArgs:
-        description: "docker build args (see --build-arg in docker docs)"
-        default: ""
-        required: false
         type: string
       platforms:
         description: "the list of platforms/architectures to create docker images for"
