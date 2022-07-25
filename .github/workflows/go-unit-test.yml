@@ -11,7 +11,7 @@ on:
       unitTestCommand:
         description: "unit test command to run using bash"
         default: "make race"
-        required: true
+        required: false
         type: string
       uploadToCodecov:
         description: "flag to indicate if the results should be uploaded to codecov"
