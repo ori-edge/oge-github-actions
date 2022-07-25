@@ -1,4 +1,4 @@
-name: Docker scan
+name: Go unit test
 
 on:
   workflow_call:
