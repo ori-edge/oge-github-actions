@@ -166,4 +166,6 @@ GitHub workflow to run go test and upload the coverage report to codecov (option
 jobs:
   unit-test:
     uses: ori-edge/oge-github-actions/.github/workflows/go-unit-test.yml@v0.4.0
+    secrets:
+      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 ```
