@@ -69,7 +69,7 @@ to chart version. This allows dynamically inject built version to your applicati
 ```yaml
 jobs:
   docker:
-    uses: ori-edge/oge-github-actions/.github/workflows/docker.yml@v0.3.0
+    uses: ori-edge/oge-github-actions/.github/workflows/docker.yml@v0.5.0
     with:
       dockerImageMode: branch_ref
       imageName: example-app
