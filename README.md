@@ -174,7 +174,7 @@ jobs:
 ```
 
 ## go-integration-test
-GitHub workflow to run go test and upload the coverage report to codecov (optional)
+GitHub workflow to run go integration tests (supports docker registry login if private images required).
 
 ### inputs
 
