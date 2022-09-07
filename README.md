@@ -74,6 +74,7 @@ jobs:
       dockerImageMode: branch_ref
       imageName: example-app
       platforms: linux/amd64
+      push: ${{ github.actor != 'dependabot[bot]' }}
     secrets:
       REGISTRY_USERNAME: ${{ secrets.REGISTRY_USERNAME }}
       REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
@@ -166,6 +167,36 @@ GitHub workflow to run go test and upload the coverage report to codecov (option
 jobs:
   unit-test:
     uses: ori-edge/oge-github-actions/.github/workflows/go-unit-test.yml@v0.4.0
+    with:
+      uploadToCodecov: ${{ github.actor != 'dependabot[bot]' }}
     secrets:
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+```
+
+## go-integration-test
+GitHub workflow to run go integration tests (supports docker registry login if private images required).
+
+### inputs
+
+| input                 | required | default          | description                                           |
+|-----------------------|----------|------------------|-------------------------------------------------------|
+| skip                  | false    | false            | flag to indicate if this workflow should skip         |
+| goVersion             | false    | 1.18.4           | version of go to load                                 |
+| loginToDockerRegistry | false    | false            | flag to indicate if docker registry login is required |
+| dockerRegistry        | false    | quay.io          | docker registry hostname                              |
+| setupCommand          | false    | make up          | setup test command to run using bash                  |
+| testCommand           | false    | make integration | integration test command to run using bash            |
+
+### workflow example
+
+```yaml
+jobs:
+  integration:
+    uses: ori-edge/oge-github-actions/.github/workflows/go-integration-test.yml@v0.6.0
+    with:
+      skip: ${{ github.actor == 'dependabot[bot]' }}
+      loginToDockerRegistry: true
+    secrets:
+      REGISTRY_USERNAME: ${{ secrets.REGISTRY_USERNAME }}
+      REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
 ```

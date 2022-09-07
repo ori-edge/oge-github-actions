@@ -1,0 +1,70 @@
+name: Go integration test
+
+on:
+  workflow_call:
+    inputs:
+      skip:
+        description: "flag to indicate if this workflow should skip"
+        default: false
+        required: false
+        type: boolean
+      goVersion:
+        description: "version of go to use"
+        default: "1.18.4"
+        required: false
+        type: string
+      loginToDockerRegistry:
+        description: "flag to indicate if docker registry login is required"
+        default: false
+        required: false
+        type: boolean
+      dockerRegistry:
+        description: "docker registry hostname"
+        required: false
+        default: "quay.io"
+        type: string
+      setupCommand:
+        description: "setup test command to run using bash"
+        default: "make up"
+        required: false
+        type: string
+      testCommand:
+        description: "integration test command to run using bash"
+        default: "make integration"
+        required: false
+        type: string
+    secrets:
+      REGISTRY_USERNAME:
+        description: "docker registry username"
+        required: false
+      REGISTRY_PASSWORD:
+        description: "docker registry password"
+        required: false
+
+jobs:
+  integration-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        if: ${{ ! inputs.skip }}
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - name: Setup Go
+        if: ${{ ! inputs.skip }}
+        uses: actions/setup-go@v3
+        with:
+          go-version:  ${{ inputs.goVersion }}
+      - name: Login to docker registry
+        if: ${{ ! inputs.skip && inputs.loginToDockerRegistry }}
+        uses: docker/login-action@v2
+        with:
+          registry: ${{ inputs.dockerRegistry }}
+          username: ${{ secrets.REGISTRY_USERNAME }}
+          password: ${{ secrets.REGISTRY_PASSWORD }}
+      - name: Setup tests
+        if: ${{ ! inputs.skip && inputs.setupCommand }}
+        run: bash -c "${{ inputs.setupCommand }}"
+      - name: Run tests
+        if: ${{ ! inputs.skip && inputs.testCommand }}
+        run: bash -c "${{ inputs.testCommand }}"
