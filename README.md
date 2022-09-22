@@ -186,6 +186,7 @@ GitHub workflow to run go integration tests (supports docker registry login if p
 | dockerRegistry        | false    | quay.io          | docker registry hostname                              |
 | setupCommand          | false    | make up          | setup test command to run using bash                  |
 | testCommand           | false    | make integration | integration test command to run using bash            |
+| buildArtifactName     | false    |                  | build artifact to download before running tests       |
 
 ### workflow example
 
@@ -196,6 +197,7 @@ jobs:
     with:
       skip: ${{ github.actor == 'dependabot[bot]' }}
       loginToDockerRegistry: true
+      buildArtifactName: some-build-artifact
     secrets:
       REGISTRY_USERNAME: ${{ secrets.REGISTRY_USERNAME }}
       REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
