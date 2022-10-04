@@ -5,7 +5,7 @@ on:
     inputs:
       goVersion:
         description: "version of go to use"
-        default: "1.18.4"
+        default: "1.19.1"
         required: false
         type: string
       unitTestCommand:
