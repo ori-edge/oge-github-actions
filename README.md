@@ -116,7 +116,7 @@ GitHub workflow to build helm charts and push to gcp. All helm charts are expect
 ```yaml
 jobs:
   gcp-helm-charts:
-    uses: ori-edge/oge-github-actions/.github/workflows/gcp-helm-charts.yml@v0.3.0
+    uses: ori-edge/oge-github-actions/.github/workflows/gcp-helm-charts.yml@v0.7.2
     with:
       chartPath: "charts/example-app/Chart.yaml"
       gcpDestination: "helm-charts"
