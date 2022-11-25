@@ -3,10 +3,6 @@ name: Build helm charts and push to gcp
 on:
   workflow_call:
     inputs:
-      chartPath:
-        description: "helm Chart.yaml path e.g. charts/yourapp/Chart.yaml"
-        required: true
-        type: string
       gcpDestination:
         description: "gcp directory where the packaged chart will be uploaded"
         required: true
