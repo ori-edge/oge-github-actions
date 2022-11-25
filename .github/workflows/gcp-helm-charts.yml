@@ -3,10 +3,6 @@ name: Build helm charts and push to gcp
 on:
   workflow_call:
     inputs:
-      chartPath:
-        description: "helm Chart.yaml path e.g. charts/yourapp/Chart.yaml"
-        required: true
-        type: string
       gcpDestination:
         description: "gcp directory where the packaged chart will be uploaded"
         required: true
@@ -33,10 +29,14 @@ jobs:
       - name: Package Helm Chart
         run: helm package ./charts/* --destination ./charts
 
-      - name: Push chart to GCP Cloud Storage
-        uses: google-github-actions/upload-cloud-storage@v0.10.4
+      - name: Authorize with GCP
+        uses: google-github-actions/auth@v1
         with:
-          credentials: ${{ secrets.GCP_CREDENTIALS }}
+          credentials_json: ${{ secrets.GCP_CREDENTIALS }}
+
+      - name: Push chart to GCP Cloud Storage
+        uses: google-github-actions/upload-cloud-storage@v1.0.0
+        with:
           path: ./charts
           glob: "*.tgz"
           destination: ${{ inputs.gcpDestination }}
