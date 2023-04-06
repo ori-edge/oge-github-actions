@@ -22,7 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           fetch-depth: 0
 
@@ -31,20 +31,20 @@ jobs:
 
       - name: Wait for deploy
         run: |
-          TAG=${{ env.CHART_VERSION }}  
+          TAG=${{ env.CHART_VERSION }}
           for i in $(seq 1 10)
-          do       
+          do
             VERSION=$(curl -s ${{ inputs.url }} | jq '${{ inputs.jq }}' | tr -d '"')
             sleep 60
             if [[ $VERSION == $TAG ]]
-            then 
+            then
                echo "$VERSION is released"
                break
             elif [[ i -eq 10 ]]
-            then 
+            then
                echo "$TAG has not been deployed"
                exit 1
-            else 
+            else
                 echo "$VERSION is currently deployed, waiting for $TAG"
             fi
           done
