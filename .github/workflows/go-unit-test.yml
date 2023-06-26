@@ -40,6 +40,7 @@ jobs:
         uses: actions/setup-go@v4
         with:
           go-version:  ${{ inputs.goVersion }}
+          cache-dependency-path: go.sum
       - name: Unit Test
         run: bash -c "${{ inputs.unitTestCommand }}"
       - name: Upload Coverage Report
