@@ -31,9 +31,3 @@ jobs:
               ref: "refs/tags/${{ env.CHART_VERSION }}",
               sha: context.sha
             })
-            github.rest.git.createRef({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              ref: "refs/tags/v${{ env.CHART_VERSION }}",
-              sha: context.sha
-            })
