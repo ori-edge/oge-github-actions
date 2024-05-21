@@ -37,15 +37,15 @@ jobs:
         with:
           fetch-depth: 0
       - name: Setup Go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v5
         with:
-          go-version:  ${{ inputs.goVersion }}
+          go-version: ${{ inputs.goVersion }}
           cache-dependency-path: go.sum
       - name: Unit Test
         run: bash -c "${{ inputs.unitTestCommand }}"
       - name: Upload Coverage Report
         if: ${{ inputs.uploadToCodecov }}
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v4.4.1
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           file: ${{ inputs.coverageFilePath }}
