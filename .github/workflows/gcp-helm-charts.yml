@@ -3,6 +3,11 @@ name: Build helm charts and push to gcp
 on:
   workflow_call:
     inputs:
+      chartsPath:
+        description: "path chart files (including glob pattern)"
+        required: false
+        default: "./charts/*"
+        type: string
       gcpDestination:
         description: "gcp directory where the packaged chart will be uploaded"
         required: true
@@ -25,7 +30,7 @@ jobs:
         uses: Azure/setup-helm@v4.2.0
 
       - name: Package Helm Chart
-        run: helm package ./charts/* --destination ./charts
+        run: helm package ${{ inputs.chartsPath }} --destination ./charts
 
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2.1.3
