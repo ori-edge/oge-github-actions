@@ -8,10 +8,15 @@ on:
         default: "."
         required: false
         type: string
+      runsOn:
+        description: "github actions runner to use for this action"
+        default: "ubuntu-latest"
+        required: false
+        type: string
 
 jobs:
   docker-scan:
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runsOn }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4

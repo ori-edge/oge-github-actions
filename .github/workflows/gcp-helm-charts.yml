@@ -12,6 +12,11 @@ on:
         description: "gcp directory where the packaged chart will be uploaded"
         required: true
         type: string
+      runsOn:
+        description: "github actions runner to use for this action"
+        default: "ubuntu-latest"
+        required: false
+        type: string
     secrets:
       GCP_CREDENTIALS:
         description: "gcp credentials"
@@ -19,7 +24,7 @@ on:
 
 jobs:
   gcp-helm-charts:
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runsOn }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4

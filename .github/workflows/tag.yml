@@ -7,10 +7,19 @@ on:
         description: "helm Chart.yaml path e.g. charts/yourapp/Chart.yaml"
         required: true
         type: string
+      runsOn:
+        description: "github actions runner to use for this action"
+        default: "ubuntu-latest"
+        required: false
+        type: string
+    secrets:
+      GH_TOKEN:
+        description: "github token to use for tag creation"
+        required: false
 
 jobs:
   git-tag:
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runsOn }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -23,7 +32,7 @@ jobs:
       - name: Create tags
         uses: actions/github-script@v7
         with:
-          github-token: ${{ github.token }}
+          github-token: ${{ secrets.GH_TOKEN || github.token }}
           script: |
             github.rest.git.createRef({
               owner: context.repo.owner,

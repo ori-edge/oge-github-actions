@@ -37,6 +37,11 @@ on:
         description: "build artifact to download before running tests"
         required: false
         type: string
+      runsOn:
+        description: "github actions runner to use for this action"
+        default: "ubuntu-latest"
+        required: false
+        type: string
     secrets:
       REGISTRY_USERNAME:
         description: "docker registry username"
@@ -47,7 +52,7 @@ on:
 
 jobs:
   integration-test:
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runsOn }}
     steps:
       - name: Check out
         if: ${{ ! inputs.skip }}
