@@ -61,7 +61,7 @@ jobs:
           fetch-depth: 0
       - name: Download build artifact
         if: ${{ ! inputs.skip && inputs.buildArtifactName }}
-        uses: actions/download-artifact@v4.1.8
+        uses: actions/download-artifact@v4.1.9
         with:
           name: ${{ inputs.buildArtifactName }}
           path: ${{ inputs.buildArtifactName }}/
