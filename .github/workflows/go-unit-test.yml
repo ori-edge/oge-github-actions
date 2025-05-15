@@ -28,6 +28,16 @@ on:
         default: "ubuntu-latest"
         required: false
         type: string
+      loginDocker:
+        description: "the flag indicating if the unit tests need to access a private docker registry"
+        default: false
+        required: false
+        type: boolean
+      dockerRegistry:
+        description: "name of the docker registry"
+        required: false
+        default: "quay.io"
+        type: string
     secrets:
       CODECOV_TOKEN:
         description: "codecov report upload token"
@@ -46,6 +56,15 @@ jobs:
         with:
           go-version: ${{ inputs.goVersion }}
           cache-dependency-path: go.sum
+
+      - name: Login to docker registry
+        if: ${{ inputs.loginDocker }}
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ inputs.dockerRegistry }}
+          username: ${{ secrets.REGISTRY_USERNAME }}
+          password: ${{ secrets.REGISTRY_PASSWORD }}
+
       - name: Unit Test
         run: bash -c "${{ inputs.unitTestCommand }}"
       - name: Upload Coverage Report
