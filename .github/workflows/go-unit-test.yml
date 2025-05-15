@@ -42,6 +42,12 @@ on:
       CODECOV_TOKEN:
         description: "codecov report upload token"
         required: false
+      REGISTRY_USERNAME:
+        description: "docker registry username"
+        required: false
+      REGISTRY_PASSWORD:
+        description: "docker registry password"
+        required: false
 
 jobs:
   unit-test:
