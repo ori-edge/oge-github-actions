@@ -1,0 +1,65 @@
+name: Helm lint
+
+on:
+  workflow_call:
+    inputs:
+      chartPath:
+        description: "path to the Helm chart directory"
+        required: true
+        type: string
+      helmVersion:
+        description: "version of Helm to use"
+        default: "latest"
+        required: false
+        type: string
+      runsOn:
+        description: "github actions runner to use for this action"
+        default: "ubuntu-latest"
+        required: false
+        type: string
+      runTemplate:
+        description: "also run helm template to validate chart renders"
+        default: true
+        required: false
+        type: boolean
+      releaseName:
+        description: "release name to use for helm template"
+        default: "test-release"
+        required: false
+        type: string
+      valueFiles:
+        description: "comma-separated list of values files to use for helm template"
+        required: false
+        type: string
+      additionalLintArgs:
+        description: "additional arguments to pass to helm lint"
+        required: false
+        type: string
+      additionalTemplateArgs:
+        description: "additional arguments to pass to helm template"
+        required: false
+        type: string
+
+jobs:
+  helm-lint:
+    runs-on: ${{ inputs.runsOn }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: ${{ inputs.helmVersion }}
+      - name: Helm lint
+        run: helm lint ${{ inputs.chartPath }} ${{ inputs.additionalLintArgs }}
+      - name: Helm template
+        if: ${{ inputs.runTemplate }}
+        run: |
+          ARGS="${{ inputs.additionalTemplateArgs }}"
+          if [ -n "${{ inputs.valueFiles }}" ]; then
+            IFS=',' read -ra FILES <<< "${{ inputs.valueFiles }}"
+            for file in "${FILES[@]}"; do
+              ARGS="$ARGS -f $file"
+            done
+          fi
+          helm template ${{ inputs.releaseName }} ${{ inputs.chartPath }} $ARGS > /dev/null
