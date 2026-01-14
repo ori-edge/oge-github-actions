@@ -201,3 +201,73 @@ jobs:
       REGISTRY_USERNAME: ${{ secrets.REGISTRY_USERNAME }}
       REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
 ```
+
+## govulncheck
+GitHub workflow to run Go vulnerability checking using [govulncheck](https://pkg.go.dev/golang.org/x/vuln/cmd/govulncheck).
+The workflow provides smart analysis that distinguishes between:
+- Fixable vulnerabilities called by your code (fails by default)
+- Fixable vulnerabilities in dependencies not called by your code (warning)
+- Vulnerabilities without available fixes (warning)
+
+### inputs
+
+| input                       | required | default | description                                                        |
+|-----------------------------|----------|---------|--------------------------------------------------------------------|
+| goVersionFile               | false    | go.mod  | path to file containing Go version (e.g., .go-version or go.mod)   |
+| runsOn                      | false    | ubuntu-latest | github actions runner to use                                 |
+| failOnFixableVulnerabilities | false   | true    | fail the workflow if fixable vulnerabilities are found in code paths |
+
+### workflow example
+
+```yaml
+jobs:
+  govulncheck:
+    uses: ori-edge/oge-github-actions/.github/workflows/govulncheck.yml@v0.16.0
+```
+
+With custom settings:
+```yaml
+jobs:
+  govulncheck:
+    uses: ori-edge/oge-github-actions/.github/workflows/govulncheck.yml@v0.16.0
+    with:
+      failOnFixableVulnerabilities: false  # only warn, don't fail
+```
+
+## helm-lint
+GitHub workflow to lint Helm charts and optionally validate they render correctly.
+
+### inputs
+
+| input                  | required | default        | description                                              |
+|------------------------|----------|----------------|----------------------------------------------------------|
+| chartPath              | true     |                | path to the Helm chart directory                         |
+| helmVersion            | false    | latest         | version of Helm to use                                   |
+| runsOn                 | false    | ubuntu-latest  | github actions runner to use                             |
+| runTemplate            | false    | true           | also run helm template to validate chart renders         |
+| releaseName            | false    | test-release   | release name to use for helm template                    |
+| valueFiles             | false    |                | comma-separated list of values files for helm template   |
+| additionalLintArgs     | false    |                | additional arguments to pass to helm lint                |
+| additionalTemplateArgs | false    |                | additional arguments to pass to helm template            |
+
+### workflow example
+
+```yaml
+jobs:
+  helm-lint:
+    uses: ori-edge/oge-github-actions/.github/workflows/helm-lint.yml@v0.16.0
+    with:
+      chartPath: charts/my-app
+      releaseName: my-app
+```
+
+With custom values files:
+```yaml
+jobs:
+  helm-lint:
+    uses: ori-edge/oge-github-actions/.github/workflows/helm-lint.yml@v0.16.0
+    with:
+      chartPath: charts/my-app
+      releaseName: my-app
+      valueFiles: "values.yaml,values-prod.yaml"
+```

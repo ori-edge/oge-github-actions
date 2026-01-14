@@ -1,0 +1,87 @@
+name: Go vulnerability check
+
+on:
+  workflow_call:
+    inputs:
+      goVersionFile:
+        description: "path to file containing Go version (e.g., .go-version or go.mod)"
+        default: "go.mod"
+        required: false
+        type: string
+      runsOn:
+        description: "github actions runner to use for this action"
+        default: "ubuntu-latest"
+        required: false
+        type: string
+      failOnFixableVulnerabilities:
+        description: "fail the workflow if fixable vulnerabilities are found in code paths"
+        default: true
+        required: false
+        type: boolean
+
+jobs:
+  govulncheck:
+    runs-on: ${{ inputs.runsOn }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: ${{ inputs.goVersionFile }}
+      - name: Run govulncheck
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+
+          # Run with JSON output and capture result
+          govulncheck -json ./... > vulns.json 2>&1 || true
+
+          # Always show human-readable output first
+          echo "=== govulncheck results ==="
+          govulncheck ./... 2>&1 || true
+          echo "==========================="
+
+          # Analyze vulnerabilities using jq
+          # - Group by OSV ID
+          # - Check if fix is available (fixed_version field exists)
+          # - Check if code actually calls vulnerable function (trace has position field)
+          ANALYSIS=$(jq -s '
+            [.[] | select(.finding)] |
+            group_by(.finding.osv) |
+            map({
+              osv: .[0].finding.osv,
+              has_fix: ([.[] | select(.finding.fixed_version)] | length > 0),
+              is_called: ([.[] | select(.finding.trace[0].position)] | length > 0)
+            })
+          ' vulns.json)
+
+          TOTAL=$(echo "$ANALYSIS" | jq 'length')
+          CALLED_WITH_FIX=$(echo "$ANALYSIS" | jq '[.[] | select(.has_fix and .is_called)] | length')
+          CALLED_NO_FIX=$(echo "$ANALYSIS" | jq '[.[] | select(.is_called and (.has_fix | not))] | length')
+          NOT_CALLED_WITH_FIX=$(echo "$ANALYSIS" | jq '[.[] | select(.has_fix and (.is_called | not))] | length')
+
+          echo "Summary:"
+          echo "  Total vulnerabilities: $TOTAL"
+          echo "  Called by code with fix available: $CALLED_WITH_FIX (action required)"
+          echo "  Called by code without fix: $CALLED_NO_FIX (no action possible)"
+          echo "  Not called but fixable: $NOT_CALLED_WITH_FIX (low priority)"
+
+          if [ "$CALLED_WITH_FIX" -gt 0 ]; then
+            echo ""
+            echo "Fixable vulnerabilities that your code calls:"
+            echo "$ANALYSIS" | jq -r '.[] | select(.has_fix and .is_called) | "  - \(.osv)"'
+            if [ "${{ inputs.failOnFixableVulnerabilities }}" = "true" ]; then
+              echo "::error::Fixable vulnerabilities found in code paths - please update dependencies"
+              exit 1
+            else
+              echo "::warning::Fixable vulnerabilities found in code paths - please update dependencies"
+            fi
+          elif [ "$NOT_CALLED_WITH_FIX" -gt 0 ]; then
+            echo "::warning::Fixable vulnerabilities in dependencies (not called by your code)"
+          fi
+
+          if [ "$CALLED_NO_FIX" -gt 0 ]; then
+            echo "::warning::Vulnerabilities found in code paths but no fixes available yet"
+          fi
+
+          exit 0
