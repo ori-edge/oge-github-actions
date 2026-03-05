@@ -1,0 +1,66 @@
+name: auto-semver-CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - auto-semver/**
+  pull_request:
+    branches: [main]
+    paths:
+      - auto-semver/**
+
+defaults:
+  run:
+    working-directory: auto-semver
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: auto-semver/package-lock.json
+
+      - run: npm ci
+
+      - run: npm test
+
+  build:
+    name: Build dist
+    runs-on: ubuntu-latest
+    # Only commit dist/ on pushes to main, not on PRs.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: test
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Use a token that can push to a protected main branch if needed.
+          # For unprotected branches the default GITHUB_TOKEN is sufficient.
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: auto-semver/package-lock.json
+
+      - run: npm ci
+
+      - run: npm run build
+
+      - name: Commit dist if changed
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add dist/
+          # Only commit if there are staged changes.
+          git diff --staged --quiet || git commit -m "chore: rebuild dist [skip ci]"
+          git push
