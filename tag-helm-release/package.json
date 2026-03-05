@@ -1,0 +1,18 @@
+{
+  "name": "tag-helm-release",
+  "version": "1.0.0",
+  "description": "Creates a fishbone Helm release tag via the GitHub API",
+  "main": "index.js",
+  "scripts": {
+    "build": "ncc build index.js -o dist --license licenses.txt",
+    "test": "node --test test/index.test.js"
+  },
+  "dependencies": {
+    "@actions/core": "^1.10.1",
+    "@actions/github": "^6.0.0"
+  },
+  "devDependencies": {
+    "@vercel/ncc": "^0.38.2"
+  },
+  "license": "MIT"
+}
