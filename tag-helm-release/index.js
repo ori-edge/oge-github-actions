@@ -230,21 +230,31 @@ async function createTree(octokit, owner, repo, baseTreeSha, files) {
  * Create a commit off HEAD pointing at the new tree.
  * This commit is not on any branch — it is a fishbone dangling commit.
  *
+ * The author and committer identity must match the token being used. When
+ * using a bot token, supply the bot's name and noreply email so GitHub can
+ * mark the commit as verified. The defaults match GitHub's own Actions bot
+ * (ID 41898282), which is correct when using GITHUB_TOKEN.
+ *
  * @param {ReturnType<typeof getOctokit>} octokit
  * @param {string} owner
  * @param {string} repo
  * @param {string} message
  * @param {string} treeSha
- * @param {string} parentSha  HEAD commit SHA
+ * @param {string} parentSha      HEAD commit SHA
+ * @param {string} committerName
+ * @param {string} committerEmail
  * @returns {Promise<string>} new commit SHA
  */
-async function createCommit(octokit, owner, repo, message, treeSha, parentSha) {
+async function createCommit(octokit, owner, repo, message, treeSha, parentSha, committerName, committerEmail) {
+  const identity = { name: committerName, email: committerEmail };
   const { data } = await octokit.rest.git.createCommit({
     owner,
     repo,
     message,
     tree: treeSha,
     parents: [parentSha],
+    author: identity,
+    committer: identity,
   });
   return data.sha;
 }
@@ -290,6 +300,8 @@ async function run() {
         .filter(Boolean),
     );
     const pullPolicy = core.getInput("pull-policy") || "IfNotPresent";
+    const committerName  = core.getInput("committer-name")  || "github-actions[bot]";
+    const committerEmail = core.getInput("committer-email") || "41898282+github-actions[bot]@users.noreply.github.com";
 
     const chartPath = `${chartDir}/Chart.yaml`;
     const valuesPath = `${chartDir}/values.yaml`;
@@ -303,6 +315,8 @@ async function run() {
     core.info(`Chart dir          : ${chartDir}`);
     core.info(`Image repositories : ${[...repositories].sort().join(", ")}`);
     core.info(`Pull policy        : ${pullPolicy}`);
+    core.info(`Committer name     : ${committerName}`);
+    core.info(`Committer email    : ${committerEmail}`);
 
     // ── Fetch current HEAD commit to get its tree SHA ─────────────────────────
 
@@ -338,6 +352,8 @@ async function run() {
       `chore(release): ${tag}`,
       treeSha,
       headSha,
+      committerName,
+      committerEmail,
     );
     core.info(`New commit SHA     : ${commitSha}`);
 

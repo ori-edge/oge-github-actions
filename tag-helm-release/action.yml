@@ -34,6 +34,20 @@ inputs:
       imagePullPolicy to set on matching image blocks.
     required: false
     default: "IfNotPresent"
+  committer-name:
+    description: >
+      Name to use for the release commit author and committer. Must match the
+      identity of the token being used so GitHub can mark the commit as
+      verified. Defaults to the standard GitHub Actions bot.
+    required: false
+    default: "github-actions[bot]"
+  committer-email:
+    description: >
+      Email to use for the release commit author and committer. Must be the
+      noreply address associated with the token's account. Defaults to the
+      standard GitHub Actions bot noreply address.
+    required: false
+    default: "41898282+github-actions[bot]@users.noreply.github.com"
 
 outputs:
   commit:
