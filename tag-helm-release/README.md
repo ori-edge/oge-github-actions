@@ -22,10 +22,14 @@ jobs:
       - name: Compute next version
         id: semver
         uses: ori-edge/oge-github-actions/auto-semver@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Create Helm release tag
         if: steps.semver.outputs.tag != ''
         uses: ori-edge/oge-github-actions/tag-helm-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           version: ${{ steps.semver.outputs.version }}
           tag: ${{ steps.semver.outputs.tag }}
@@ -33,7 +37,7 @@ jobs:
           image-repositories: ghcr.io/ori-edge/myapp,ghcr.io/ori-edge/sidecar
 ```
 
-`GITHUB_TOKEN` is used automatically — no extra secrets needed.
+`GITHUB_TOKEN` requires write permission and is used automatically — no extra secrets needed.
 
 ## Inputs
 
