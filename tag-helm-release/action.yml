@@ -1,0 +1,45 @@
+name: "tag-helm-release"
+description: >
+  Creates a fishbone release tag by patching Chart.yaml and values.yaml via
+  the GitHub API, committing off HEAD, and pushing the tag. Main is never
+  modified. No checkout required.
+
+author: "your-org"
+
+inputs:
+  version:
+    description: >
+      Semver string without leading v, e.g. 1.2.3. Typically the version
+      output from auto-semver.
+    required: true
+  tag:
+    description: >
+      Tag ref to create, e.g. v1.2.3. Typically the tag output from
+      auto-semver.
+    required: true
+  chart-dir:
+    description: >
+      Path to the directory containing Chart.yaml and values.yaml,
+      e.g. dist/chart.
+    required: true
+  image-repositories:
+    description: >
+      Comma-separated list of repository: values to match in values.yaml
+      image blocks, e.g. ghcr.io/ori-edge/myapp,ghcr.io/ori-edge/sidecar.
+      Only image blocks whose repository: matches an entry will have their
+      tag: and pullPolicy: updated.
+    required: true
+  pull-policy:
+    description: >
+      imagePullPolicy to set on matching image blocks.
+    required: false
+    default: "IfNotPresent"
+
+outputs:
+  commit:
+    description: >
+      SHA of the fishbone commit created off HEAD. Not on any branch.
+
+runs:
+  using: "node20"
+  main: "dist/index.js"
