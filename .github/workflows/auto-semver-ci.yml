@@ -66,8 +66,11 @@ jobs:
           git push
   self-test:
     name: Self Test
+    needs: build
     runs-on: ubuntu-latest
     steps:
+      # need local checkout to use action from current branch
+      - uses: actions/checkout@v4
       - name: Test compute next version
         id: semver
         uses: ./auto-semver
