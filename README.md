@@ -271,3 +271,66 @@ jobs:
       releaseName: my-app
       valueFiles: "values.yaml,values-prod.yaml"
 ```
+
+## Fishbone tagging release workflow
+
+Some repositories have opted into a fishbone tagging release strategy with automatic [semantic versioning](https://semver.org/) derived from [conventional commits](https://www.conventionalcommits.org/en/v1.0.0/).
+
+Fishbone tagging is where the tag that is pushed is a commit that is never merged back to the main branch.
+In Git, tags are pointers to commits and the commits do not have ever been on any branch in order to be tagged.
+The fishbone name originates from the resulting commit graph shape where the tags resemble fishbone spines:
+
+![commits with fishbone tags](images/fishbone-tags.png)
+
+The fishbone tagging strategy helps solve a common issue when it is necessary to encode the version number in the source code tree itself.
+This can cause a lot of merge conflict issues as typically *either* every pull request needs to know in advance what version it will be when merged, which causes any other pull requests in flight to conflict once one is merged, *or* there needs to be a special workflow that updates the main branch version causing conflicts for developers and risking looping by the CI engine.
+
+With a fishbone tagging, the version on the main branch stays at the lowest possible version, typically with a qualifier, e.g. `0.0.0-dev` this will ensure that any system automatically upgrading to the latest version will not see the development version as new.
+Then the workflow that creates the tag will build a new commit with the version file updated and tag that commit without pushing it back to the main branch.
+This eliminates the churn on the main branch.
+
+We have two actions that can be used to support fishbone tagging with semantic versioning driven by conventional commits: [auto-semver](./auto-semver) and [tag-helm-release](./tag-helm-release).
+The tag job will look something like this:
+
+```yaml
+  git-tag:
+    name: Create Release Tag
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Compute next version
+        id: semver
+        uses: ori-edge/oge-github-actions/auto-semver@v0.19.2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create Helm release tag
+        if: steps.semver.outputs.tag != ''
+        uses: ori-edge/oge-github-actions/tag-helm-release@v0.19.2
+        env:
+          # we need to use a bot token, so that the release workflow can be triggered
+          # to get a verified commit the BOT token must have been issued for a GitHub
+          # App that you own and that has write permission against the repo to tag
+          # you will also need to set the committer name and email correctly in order
+          # for GitHub to see the commit as verified.
+          GITHUB_TOKEN: ${{ secrets.BOT_TOKEN }}
+        with:
+          version: "${{ steps.semver.outputs.version }}"
+          tag: "${{ steps.semver.outputs.tag }}"
+          chart-dir: "dist/chart"
+          image-repositories: "ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}"
+          committer-name: "YOUR BOT NAME GOES HERE"
+          committer-email: "YOUR BOT EMAIL GOES HERE"
+```
+
+With the above job in a workflow that runs on merge to main or, for manual tagging, using a workflow dispatch you will get new tags every time it runs (assuming there have been changes since the last run).
+
+The version number will be automatically incremented based on the commit messages:
+
+* commit messages that start with `feat!:` will cause a major version bump.
+* otherwise, commit messages that start with `feat:` will cause a minor version bump.
+* otherwise, commit messages that start with `fix:` or `chore:` or that fail to parse as valid conventional commits will only cause a patch bump.
+* see [conventional commits](https://www.conventionalcommits.org/en/v1.0.0/) for the full details.
+
+Note: existing tags following semver will always be considered, so if the workflow gets stuck, manually pushing a tag should unstick.
