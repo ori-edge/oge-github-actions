@@ -1,0 +1,35 @@
+name: "auto-semver"
+description: >
+  Automatically computes the next semver version from conventional commits
+  since the last tag and emits version, tag, and bump outputs.
+
+author: "ori-edge"
+
+inputs:
+  tag-parent-depth:
+    description: >
+      Number of first-parent hops to walk back from the tag's commit SHA to
+      find the ancestor commit that lives on the main branch. With fishbone
+      tagging the tag sits on a merge commit whose first parent is the
+      main-branch commit, so the default of 1 is correct for that topology.
+    required: false
+    default: "1"
+
+outputs:
+  version:
+    description: >
+      The computed next version string (e.g. "1.2.3"), or empty string when
+      there is nothing to release (tag already exists, no suitable base tag
+      found on the current branch, or no prior tags exist yet).
+  tag:
+    description: >
+      The computed next tag (e.g. "v1.2.3"), or empty string when there is
+      nothing to release.
+  bump:
+    description: >
+      The bump type applied: "major", "minor", or "patch". Empty when there
+      is nothing to release.
+
+runs:
+  using: "node20"
+  main: "dist/index.js"
