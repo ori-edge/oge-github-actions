@@ -64,3 +64,12 @@ jobs:
           # Only commit if there are staged changes.
           git diff --staged --quiet || git commit -m "chore: rebuild dist [skip ci]"
           git push
+  self-test:
+    name: Self Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Test compute next version
+        id: semver
+        uses: ./auto-semver
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

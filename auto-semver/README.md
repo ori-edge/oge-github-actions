@@ -21,7 +21,9 @@ jobs:
       - name: Compute next version
         id: semver
         uses: ori-edge/oge-github-actions/auto-semver@v1
-
+        env:
+           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+           
       - uses: actions/checkout@v4
         if: steps.semver.outputs.tag != ''
 
@@ -53,7 +55,9 @@ jobs:
       - name: Compute next version
         id: semver
         uses: ori-edge/oge-github-actions/auto-semver@v1
-
+        env:
+           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+           
       - uses: actions/checkout@v4
         if: steps.semver.outputs.tag != ''
 
