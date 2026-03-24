@@ -18,6 +18,10 @@ on:
         default: true
         required: false
         type: boolean
+    secrets:
+      GH_TOKEN:
+        description: "github PAT to use for pulling dependencies"
+        required: false
 
 jobs:
   govulncheck:
@@ -29,6 +33,14 @@ jobs:
         uses: actions/setup-go@v6
         with:
           go-version-file: ${{ inputs.goVersionFile }}
+
+      - name: Configure GitHub authentication
+        env:
+          HAS_TOKEN: ${{ secrets.GH_TOKEN != '' }}
+        if: env.HAS_TOKEN == 'true'
+        run: |
+          git config --global url."https://${{ secrets.GH_TOKEN }}@github.com/ori-edge/".insteadOf "https://github.com/ori-edge/"
+
       - name: Run govulncheck
         run: |
           go install golang.org/x/vuln/cmd/govulncheck@latest

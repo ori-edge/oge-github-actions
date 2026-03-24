@@ -48,6 +48,9 @@ on:
       REGISTRY_PASSWORD:
         description: "docker registry password"
         required: false
+      GH_TOKEN:
+        description: "github PAT to use for pulling dependencies"
+        required: false
 
 jobs:
   unit-test:
@@ -62,6 +65,13 @@ jobs:
         with:
           go-version: ${{ inputs.goVersion }}
           cache-dependency-path: go.sum
+
+      - name: Configure GitHub authentication
+        env:
+          HAS_TOKEN: ${{ secrets.GH_TOKEN != '' }}
+        if: env.HAS_TOKEN == 'true'
+        run: |
+          git config --global url."https://${{ secrets.GH_TOKEN }}@github.com/ori-edge/".insteadOf "https://github.com/ori-edge/"
 
       - name: Login to docker registry
         if: ${{ inputs.loginDocker }}
