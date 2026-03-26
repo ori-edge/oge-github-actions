@@ -92,7 +92,9 @@ jobs:
           HAS_TOKEN: ${{ secrets.GH_TOKEN != '' }}
         if: env.HAS_TOKEN == 'true'
         run: |
-          git config --global url."https://${{ secrets.GH_TOKEN }}@github.com/ori-edge/".insteadOf "https://github.com/ori-edge/"
+          touch $HOME/.netrc
+          chmod 600 $HOME/.netrc
+          echo 'machine github.com login x-access-token password ${{ secrets.GH_TOKEN }}' >> $HOME/.netrc
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
