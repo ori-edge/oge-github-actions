@@ -32128,7 +32128,10 @@ async function run() {
 
     const version = core.getInput("version", { required: true });
     const tag = core.getInput("tag", { required: true });
-    const chartDir = core.getInput("chart-dir", { required: true }).replace(/\/+$/, "");
+    const chartDirs = core.getInput("chart-dir", { required: true })
+      .split(",")
+      .map((d) => d.trim().replace(/\/+$/, ""))
+      .filter(Boolean);
     const repositories = new Set(
       core.getInput("image-repositories", { required: true })
         .split(",")
@@ -32139,16 +32142,13 @@ async function run() {
     const committerName  = core.getInput("committer-name")  || "github-actions[bot]";
     const committerEmail = core.getInput("committer-email") || "41898282+github-actions[bot]@users.noreply.github.com";
 
-    const chartPath = `${chartDir}/Chart.yaml`;
-    const valuesPath = `${chartDir}/values.yaml`;
-
     const [owner, repo] = repository.split("/");
     const octokit = getOctokit(token);
 
     core.info(`HEAD SHA           : ${headSha}`);
     core.info(`Version            : ${version}`);
     core.info(`Tag                : ${tag}`);
-    core.info(`Chart dir          : ${chartDir}`);
+    core.info(`Chart dirs         : ${chartDirs.join(", ")}`);
     core.info(`Image repositories : ${[...repositories].sort().join(", ")}`);
     core.info(`Pull policy        : ${pullPolicy}`);
     core.info(`Committer name     : ${committerName}`);
@@ -32164,22 +32164,28 @@ async function run() {
 
     // ── Fetch and patch files ─────────────────────────────────────────────────
 
-    core.info(`Fetching ${chartPath}`);
-    const { content: chartContent } = await fetchFile(octokit, owner, repo, chartPath, headSha);
-    const patchedChart = patchChart(chartContent, version);
+    const patchedFiles = [];
+    for (const chartDir of chartDirs) {
+      const chartPath  = `${chartDir}/Chart.yaml`;
+      const valuesPath = `${chartDir}/values.yaml`;
 
-    core.info(`Fetching ${valuesPath}`);
-    const { content: valuesContent } = await fetchFile(octokit, owner, repo, valuesPath, headSha);
-    core.info(`Updating image blocks matching: ${[...repositories].sort().join(", ")}`);
-    const patchedValues = patchValues(valuesContent, version, repositories, pullPolicy);
+      core.info(`Fetching ${chartPath}`);
+      const { content: chartContent } = await fetchFile(octokit, owner, repo, chartPath, headSha);
+      const patchedChart = patchChart(chartContent, version);
+
+      core.info(`Fetching ${valuesPath}`);
+      const { content: valuesContent } = await fetchFile(octokit, owner, repo, valuesPath, headSha);
+      core.info(`Updating image blocks matching: ${[...repositories].sort().join(", ")}`);
+      const patchedValues = patchValues(valuesContent, version, repositories, pullPolicy);
+
+      patchedFiles.push({ path: chartPath,  content: patchedChart  });
+      patchedFiles.push({ path: valuesPath, content: patchedValues });
+    }
 
     // ── Create tree, commit, tag ──────────────────────────────────────────────
 
     core.info("Creating tree");
-    const treeSha = await createTree(octokit, owner, repo, baseTreeSha, [
-      { path: chartPath, content: patchedChart },
-      { path: valuesPath, content: patchedValues },
-    ]);
+    const treeSha = await createTree(octokit, owner, repo, baseTreeSha, patchedFiles);
     core.info(`New tree SHA       : ${treeSha}`);
 
     core.info("Creating commit");
