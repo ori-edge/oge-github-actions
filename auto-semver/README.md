@@ -15,16 +15,16 @@ jobs:
   release:
     runs-on: ubuntu-latest
     permissions:
-      contents: write   # required to push tags
+      contents: write # required to push tags
 
     steps:
       - name: Compute next version
         id: semver
         uses: ori-edge/oge-github-actions/auto-semver@v1
         env:
-           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-           
-      - uses: actions/checkout@v4
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/checkout@v6
         if: steps.semver.outputs.tag != ''
 
       - name: Tag and push
@@ -56,9 +56,9 @@ jobs:
         id: semver
         uses: ori-edge/oge-github-actions/auto-semver@v1
         env:
-           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-           
-      - uses: actions/checkout@v4
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/checkout@v6
         if: steps.semver.outputs.tag != ''
 
       - name: Create tagging commit and push
@@ -78,30 +78,30 @@ continues from the same point, and any in-flight PRs merge without conflict.
 
 ## Inputs
 
-| Input | Required | Default | Description |
-|-------|----------|---------|-------------|
-| `tag-parent-depth` | No | `1` | Number of first-parent hops to walk back from the tag's commit to find the ancestor on the main branch. See [Tagging topology](#tagging-topology). |
+| Input              | Required | Default | Description                                                                                                                                        |
+| ------------------ | -------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tag-parent-depth` | No       | `1`     | Number of first-parent hops to walk back from the tag's commit to find the ancestor on the main branch. See [Tagging topology](#tagging-topology). |
 
 ## Outputs
 
 All outputs are empty strings when there is nothing to release.
 
-| Output | Description |
-|--------|-------------|
-| `version` | Next version string, e.g. `1.2.3` |
-| `tag` | Next tag, e.g. `v1.2.3` |
-| `bump` | Bump type applied: `major`, `minor`, or `patch` |
+| Output    | Description                                     |
+| --------- | ----------------------------------------------- |
+| `version` | Next version string, e.g. `1.2.3`               |
+| `tag`     | Next tag, e.g. `v1.2.3`                         |
+| `bump`    | Bump type applied: `major`, `minor`, or `patch` |
 
 ## Bump rules
 
 The highest bump across all commits since the last tag wins.
 
-| Commit | Bump |
-|--------|------|
-| Subject matches `type!:` or `type(scope)!:` | `major` |
+| Commit                                                                   | Bump    |
+| ------------------------------------------------------------------------ | ------- |
+| Subject matches `type!:` or `type(scope)!:`                              | `major` |
 | Any line in the message matches `BREAKING CHANGE:` or `BREAKING-CHANGE:` | `major` |
-| Subject matches `feat:` or `feat(scope):` | `minor` |
-| Anything else (including non-conventional commits) | `patch` |
+| Subject matches `feat:` or `feat(scope):`                                | `minor` |
+| Anything else (including non-conventional commits)                       | `patch` |
 
 Full commit messages are scanned — not just the subject line — so
 `BREAKING CHANGE` footers in squash-merge bodies are correctly detected.

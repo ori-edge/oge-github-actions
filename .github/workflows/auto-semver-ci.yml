@@ -19,11 +19,11 @@ jobs:
     name: Test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "24"
           cache: "npm"
           cache-dependency-path: auto-semver/package-lock.json
 
@@ -40,7 +40,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           # Use a token that can push to a protected main branch if needed.
           # For unprotected branches the default GITHUB_TOKEN is sufficient.
@@ -48,7 +48,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "24"
           cache: "npm"
           cache-dependency-path: auto-semver/package-lock.json
 
@@ -69,7 +69,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       # need local checkout to use action from current branch
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Test compute next version
         id: semver
         uses: ./auto-semver
