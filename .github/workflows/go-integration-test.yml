@@ -9,7 +9,7 @@ on:
         required: false
         type: boolean
       goVersion:
-        description: "version of go to use"
+        description: "version of go to use (deprecated: use mise.toml instead)"
         default: "stable"
         required: false
         type: string
@@ -69,6 +69,10 @@ on:
 jobs:
   integration-test:
     runs-on: ${{ inputs.runsOn }}
+    env:
+      MISE_TOML_TEMPLATE: |-
+        [tools]
+        go =
     steps:
       - name: Check out
         if: ${{ ! inputs.skip }}
@@ -81,12 +85,18 @@ jobs:
         with:
           name: ${{ inputs.buildArtifactName }}
           path: ${{ inputs.buildArtifactName }}/
+      - name: Setup mise
+        if: ${{ ! inputs.skip }}
+        uses: jdx/mise-action@v2
+        with:
+          mise_toml: ${{ case(hashFiles('mise.toml') == '', format('{0} "{1}"', env.MISE_TOML_TEMPLATE, inputs.goVersion), '') }}
       - name: Setup Go
         if: ${{ ! inputs.skip }}
         uses: actions/setup-go@v5
         with:
-          go-version: ${{ inputs.goVersion }}
-          cache-dependency-path: go.sum
+          cache-dependency-path: |
+            go.sum
+            mise.toml
       - name: Configure GitHub authentication
         env:
           HAS_TOKEN: ${{ secrets.GH_TOKEN != '' }}

@@ -4,7 +4,7 @@ on:
   workflow_call:
     inputs:
       goVersionFile:
-        description: "path to file containing Go version (e.g., .go-version or go.mod)"
+        description: "path to file containing Go version (e.g., .go-version or go.mod); ignored when mise.toml is present (deprecated: use mise.toml instead)"
         default: "go.mod"
         required: false
         type: string
@@ -29,10 +29,20 @@ jobs:
     steps:
       - name: Check out
         uses: actions/checkout@v4
+      - name: Create mise.toml from goVersionFile
+        if: ${{ hashFiles('mise.toml') == '' }}
+        run: |
+          ver=$(grep -m1 '^go ' "${{ inputs.goVersionFile }}" | awk '{print $2}' \
+                || cat "${{ inputs.goVersionFile }}")
+          printf '[tools]\ngo = "%s"\n' "$ver" > mise.toml
+      - name: Setup mise
+        uses: jdx/mise-action@v2
       - name: Setup Go
         uses: actions/setup-go@v6
         with:
-          go-version-file: ${{ inputs.goVersionFile }}
+          cache-dependency-path: |
+            go.sum
+            mise.toml
 
       - name: Configure GitHub authentication
         env:
