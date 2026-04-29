@@ -59,6 +59,7 @@ jobs:
       MISE_TOML_TEMPLATE: |-
         [tools]
         go =
+      MISE_GO_SET_GOBIN: 'false'
     steps:
       - name: Check out
         uses: actions/checkout@v4
@@ -74,7 +75,6 @@ jobs:
           cache-dependency-path: |
             go.sum
             mise.toml
-
       - name: Configure GitHub authentication
         env:
           HAS_TOKEN: ${{ secrets.GH_TOKEN != '' }}
