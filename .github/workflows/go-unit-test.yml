@@ -67,7 +67,7 @@ jobs:
       - name: Setup mise
         uses: jdx/mise-action@v2
         with:
-          mise_toml: ${{ case(hashFiles('mise.toml') == '', format('{0} "{1}"', env.MISE_TOML_TEMPLATE, inputs.goVersion), '') }}
+          mise_toml: ${{ case(hashFiles('mise.toml') == '', format('{0} "{1}"', env.MISE_TOML_TEMPLATE, case(inputs.goVersion == 'stable', 'latest', inputs.goVersion)), '') }}
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
