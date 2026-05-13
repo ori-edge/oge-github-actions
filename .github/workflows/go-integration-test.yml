@@ -131,6 +131,6 @@ jobs:
         uses: codecov/codecov-action@v6
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          file: ${{ inputs.coverageFilePath }}
+          files: ${{ inputs.coverageFilePath }}
           flags: integration
           name: codecov-umbrella
