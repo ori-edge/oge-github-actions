@@ -97,6 +97,6 @@ jobs:
         uses: codecov/codecov-action@v6
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          file: ${{ inputs.coverageFilePath }}
+          files: ${{ inputs.coverageFilePath }}
           flags: unittests
           name: codecov-umbrella
