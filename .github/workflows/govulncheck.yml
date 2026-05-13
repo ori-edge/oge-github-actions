@@ -30,7 +30,7 @@ jobs:
       MISE_GO_SET_GOBIN: 'false'
     steps:
       - name: Check out
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: Create mise.toml from goVersionFile
         if: ${{ hashFiles('mise.toml') == '' }}
         run: |
@@ -38,7 +38,7 @@ jobs:
                 || cat "${{ inputs.goVersionFile }}")
           printf '[tools]\ngo = "%s"\n' "$ver" > mise.toml
       - name: Setup mise
-        uses: jdx/mise-action@v2
+        uses: jdx/mise-action@v4
       - name: Setup Go
         uses: actions/setup-go@v6
         with:

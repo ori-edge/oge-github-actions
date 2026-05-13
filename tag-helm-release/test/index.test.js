@@ -6,8 +6,8 @@
  * Run with: node --test test/index.test.js  (Node 18+)
  */
 
-const { describe, it } = require("node:test");
-const assert = require("node:assert/strict");
+import { describe, it } from "node:test";
+import assert from "node:assert/strict";
 
 // ── Inline patch functions (no @actions/* dependency) ────────────────────────
 
