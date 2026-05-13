@@ -47,8 +47,8 @@
  * (idempotent).
  */
 
-const core = require("@actions/core");
-const { getOctokit } = require("@actions/github");
+import * as core from "@actions/core";
+import { getOctokit } from "@actions/github";
 
 // ── Bump precedence ──────────────────────────────────────────────────────────
 

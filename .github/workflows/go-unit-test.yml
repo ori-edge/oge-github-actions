@@ -62,15 +62,15 @@ jobs:
       MISE_GO_SET_GOBIN: 'false'
     steps:
       - name: Check out
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
       - name: Setup mise
-        uses: jdx/mise-action@v2
+        uses: jdx/mise-action@v4
         with:
           mise_toml: ${{ case(hashFiles('mise.toml') == '', format('{0} "{1}"', env.MISE_TOML_TEMPLATE, case(inputs.goVersion == 'stable', 'latest', inputs.goVersion)), '') }}
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           cache-dependency-path: |
             go.sum
@@ -84,7 +84,7 @@ jobs:
 
       - name: Login to docker registry
         if: ${{ inputs.loginDocker }}
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ${{ inputs.dockerRegistry }}
           username: ${{ secrets.REGISTRY_USERNAME }}
@@ -94,7 +94,7 @@ jobs:
         run: bash -c "${{ inputs.unitTestCommand }}"
       - name: Upload Coverage Report
         if: ${{ inputs.uploadToCodecov }}
-        uses: codecov/codecov-action@v4.4.1
+        uses: codecov/codecov-action@v6
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           file: ${{ inputs.coverageFilePath }}

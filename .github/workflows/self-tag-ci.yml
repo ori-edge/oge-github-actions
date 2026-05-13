@@ -1,0 +1,37 @@
+name: tag-release
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  git-tag:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Compute next version
+        id: semver
+        uses: ./auto-semver
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create release tag
+        if: steps.semver.outputs.tag != ''
+        uses: actions/github-script@v9
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            github.rest.git.createRef({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: "refs/tags/${{ steps.semver.outputs.tag }}",
+              sha: context.sha
+            })

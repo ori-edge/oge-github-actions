@@ -55,5 +55,5 @@ outputs:
       SHA of the fishbone commit created off HEAD. Not on any branch.
 
 runs:
-  using: "node20"
+  using: "node24"
   main: "dist/index.js"
