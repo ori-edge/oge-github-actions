@@ -35,7 +35,10 @@ jobs:
         uses: Azure/setup-helm@v5
 
       - name: Package Helm Chart
-        run: helm package ${{ inputs.chartsPath }} --destination ./charts
+        run: |
+          for dir in ${{ inputs.chartsPath }}; do
+            [ -d "$dir" ] && helm package "$dir" --destination ./charts
+          done
 
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v3
