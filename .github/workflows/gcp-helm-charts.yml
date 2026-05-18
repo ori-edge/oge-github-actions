@@ -37,7 +37,9 @@ jobs:
       - name: Package Helm Chart
         run: |
           for dir in ${{ inputs.chartsPath }}; do
-            [ -d "$dir" ] && helm package "$dir" --destination ./charts
+            if [ -d "$dir" ]; then
+              helm package "$dir" --destination ./charts
+            fi
           done
 
       - name: Authenticate to Google Cloud
