@@ -39,6 +39,11 @@ jobs:
           printf '[tools]\ngo = "%s"\n' "$ver" > mise.toml
       - name: Setup mise
         uses: jdx/mise-action@v4
+        env:
+          # let consumers omit `go` from mise.toml's [tools] and source the
+          # version from go.mod via mise's idiomatic-file resolver; explicit
+          # [tools] pins still win, so this is backwards-compatible
+          MISE_IDIOMATIC_VERSION_FILE_ENABLE_TOOLS: go
       - name: Setup Go
         uses: actions/setup-go@v6
         with:
