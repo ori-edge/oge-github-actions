@@ -7,6 +7,11 @@ on:
         description: "helm Chart.yaml path e.g. charts/yourapp/Chart.yaml"
         required: true
         type: string
+      tagPrefix:
+        description: "Optional prefix for the git tag"
+        required: false
+        type: string
+        default: ""
       runsOn:
         description: "github actions runner to use for this action"
         default: "ubuntu-latest"
@@ -37,12 +42,12 @@ jobs:
             github.rest.git.createRef({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              ref: "refs/tags/${{ env.CHART_VERSION }}",
+              ref: "refs/tags/${{ inputs.tagPrefix }}${{ env.CHART_VERSION }}",
               sha: context.sha
             })
             github.rest.git.createRef({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              ref: "refs/tags/v${{ env.CHART_VERSION }}",
+              ref: "refs/tags/v${{ inputs.tagPrefix }}${{ env.CHART_VERSION }}",
               sha: context.sha
             })
