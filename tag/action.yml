@@ -1,0 +1,19 @@
+name: "tag"
+description: >
+  Creates a git tag on the current HEAD commit via the GitHub API.
+  No checkout required. Fails if the tag already exists.
+
+author: "ori-edge"
+
+inputs:
+  tag:
+    description: "Tag ref to create, e.g. 'v1.2.3'."
+    required: true
+
+outputs:
+  version:
+    description: "Semver string without leading v, derived from the tag input."
+
+runs:
+  using: "node24"
+  main: "dist/index.js"

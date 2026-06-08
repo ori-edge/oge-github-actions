@@ -12,6 +12,11 @@ on:
         description: "gcp directory where the packaged chart will be uploaded"
         required: true
         type: string
+      chartVersion:
+        description: "Chart version. If not set, computed via compute-version action."
+        required: false
+        default: ""
+        type: string
       runsOn:
         description: "github actions runner to use for this action"
         default: "ubuntu-latest"
@@ -26,6 +31,14 @@ jobs:
   gcp-helm-charts:
     runs-on: ${{ inputs.runsOn }}
     steps:
+      - name: Resolve chart version
+        id: cv
+        uses: ori-edge/oge-github-actions/compute-version@main
+        with:
+          version: ${{ inputs.chartVersion }}
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
       - name: Checkout
         uses: actions/checkout@v6
         with:
@@ -38,7 +51,7 @@ jobs:
         run: |
           for dir in ${{ inputs.chartsPath }}; do
             if [ -d "$dir" ]; then
-              helm package "$dir" --destination ./charts
+              helm package "$dir" --destination ./charts --version "${{ steps.cv.outputs.version }}"
             fi
           done
 

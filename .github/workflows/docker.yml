@@ -13,19 +13,10 @@ on:
         default: "."
         required: false
         type: string
-      chartPath:
-        description: "helm Chart.yaml path e.g. charts/yourapp/Chart.yaml (used by dockerImageMode 'chart_ref')"
-        required: false
-        type: string
       dockerFile:
         description: "path to the Dockerfile"
         required: false
         default: ""
-        type: string
-      dockerImageMode:
-        description: "mode from which the docker image should be created from (branch_ref, chart_ref, custom)"
-        required: false
-        default: "chart_ref"
         type: string
       dockerRegistry:
         description: "name of the docker registry"
@@ -92,37 +83,16 @@ jobs:
           username: ${{ secrets.REGISTRY_USERNAME }}
           password: ${{ secrets.REGISTRY_PASSWORD }}
 
-      - name: Generate image version (CHART_REF)
-        if: ${{ inputs.dockerImageMode == 'chart_ref' }}
-        run: |
-          if [[ -z "${{ inputs.chartPath }}" ]]; then
-            echo "inputs.chartPath must be set in dockerImageMode 'chart_ref'"
-            exit 1
-          fi
-          IMAGE_VERSION=$(grep '^version:' ${{ inputs.chartPath }} | cut -d ":" -f2 | tr -d ' ')
-          echo "CHART_PATH=${{ inputs.chartPath }}"
-          echo "IMAGE_VERSION=${IMAGE_VERSION}"
-          echo "IMAGE_VERSION=${IMAGE_VERSION}" >> $GITHUB_ENV
+      - name: Resolve image version
+        id: cv
+        uses: ori-edge/oge-github-actions/compute-version@main
+        with:
+          version: ${{ inputs.imageVersion }}
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
 
-      - name: Generate image version (BRANCH_REF)
-        if: ${{ inputs.dockerImageMode == 'branch_ref' }}
-        run: |
-          IMAGE_VERSION=$(echo ${GITHUB_REF#refs/heads/} | sed 's/\//_/g')
-          echo "IMAGE_VERSION=${IMAGE_VERSION}"
-          echo "IMAGE_VERSION=${IMAGE_VERSION}" >> $GITHUB_ENV
-
-      - name: Generate image version (CUSTOM)
-        if: ${{ inputs.imageVersion != '' }}
-        run: |
-          IMAGE_VERSION="${{ inputs.imageVersion }}"
-          echo "IMAGE_VERSION=${IMAGE_VERSION}"
-          echo "IMAGE_VERSION=${IMAGE_VERSION}" >> $GITHUB_ENV
-
-      - name: Validate image version
-        if: ${{ env.IMAGE_VERSION == '' }}
-        run: |
-          echo "ERROR: env.IMAGE_VERSION is empty"
-          exit 1
+      - name: Set IMAGE_VERSION
+        run: echo "IMAGE_VERSION=${{ steps.cv.outputs.version }}" >> $GITHUB_ENV
 
       - name: Generate build args
         run: |

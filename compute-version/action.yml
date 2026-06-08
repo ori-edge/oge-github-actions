@@ -1,0 +1,39 @@
+name: "compute-version"
+description: >
+  Normalises or discovers the build version. If 'version' input is provided,
+  outputs it immediately (pass-through). Otherwise uses GitHub API to determine
+  the version: if HEAD has a semver tag outputs that (release); otherwise
+  computes {next-semver}-alpha-{N} from conventional commits since the last tag.
+  No checkout required.
+
+author: "ori-edge"
+
+inputs:
+  version:
+    description: "Explicit version to use (pass-through). If empty, version is computed."
+    required: false
+    default: ""
+  tag-parent-depth:
+    description: >
+      First-parent hops from tag commit back to main. 0 for direct main tagging
+      (new pattern); 1 for fishbone (legacy). Only used when computing.
+    required: false
+    default: "0"
+  require-release:
+    description: >
+      If 'true', fails when the resolved version has a pre-release suffix.
+      Defaults to the ORI_REQUIRE_RELEASE_VERSION env var if set, otherwise 'false'.
+    required: false
+    default: ""
+
+outputs:
+  version:
+    description: "e.g. '1.2.3' or '1.2.3-alpha-5'"
+  tag:
+    description: "e.g. 'v1.2.3' or 'v1.2.3-alpha-5'"
+  is-release:
+    description: "'true' when version is an exact release (no pre-release suffix)"
+
+runs:
+  using: "node24"
+  main: "dist/index.js"

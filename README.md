@@ -1,46 +1,17 @@
 # oge-github-actions
 Oge GitHub actions and reusable workflows.
 
-Most of the projects use helm chart version as release version for docker, application version etc. This makes
-everything consistent (docker version matches git tag version and helm chart version - easier to debug, rollback, ...).
+Projects use git semver tags as the release version for docker images, application version, and helm charts.
+Everything is consistent (docker tag matches git tag matches helm chart version — easier to debug and rollback).
 
-Because of this, most of these workflows automatically retrieve version from `chartPath` argument and use it. If the
-workflow has `chartPath` argument, it means that they should run on chart update:
-```yaml
-on:
-  push:
-    branches:
-      - main
-    paths:
-      - "<path to Chart.yaml>"
-```
+`oge-*` and `ogc-*` repos use **direct-main tagging** (tag placed directly on the HEAD commit; see below).
+`ope-*` repos use **fishbone tagging** (tag on a side commit; see below).
 
-Workflows can either use `main` branch as a version e.g. `ori-edge/oge-github-actions/.github/workflows/tag.yml@main` if
-you want to get always the latest version, or you can specify a specific tag e.g.
-`ori-edge/oge-github-actions/.github/workflows/tag.yml@v0.2.0`.
-
-## tag
-GitHub workflow to create git tag, with the same name as chart version. Workflow creates two tags, one is just the
-chart version the other one is the chart version, but prefixed with `v` (this satisfies go dependency naming convention).
-
-### inputs
-
-| input          | default  | description                                         |
-|----------------|----------|-----------------------------------------------------|
-| chartPath      | N/A      | helm Chart.yaml path e.g. charts/yourapp/Chart.yaml |
-
-### workflow example
-```yaml
-jobs:
-  tag:
-    uses: ori-edge/oge-github-actions/.github/workflows/tag.yml@main
-    with:
-      chartPath: "charts/example-app/Chart.yaml"
-```
+Workflows can reference `@main` for latest or pin to a specific tag e.g. `@v0.22.0`.
 
 ## docker
-GitHub workflow to build and push docker image. Workflow also passes `--build-arg version=<chart-version>` argument set
-to chart version. This allows dynamically inject built version to your application.
+GitHub workflow to build and push docker image. Version is resolved via the `compute-version` action: if `imageVersion`
+is provided it is used directly; otherwise the version is discovered from git tags on the current commit.
 
 ### inputs
 
@@ -48,15 +19,13 @@ to chart version. This allows dynamically inject built version to your applicati
 |-----------------|----------|-------------------------|------------------------------------------------------------------------------------|
 | buildArgs       | false    |                         | docker build args (See --build-arg in docker docs)                                 |
 | buildContext    | false    | .                       | docker build context                                                               |
-| chartPath       | false    |                         | helm Chart.yaml path e.g. charts/yourapp/Chart.yaml                                |
 | dockerFile      | false    |                         | the path to the Dockerfile to generate the image from                              |
-| dockerImageMode | false    | chart_ref               | how the imageVersion should be generated (chart_ref, branch_ref, custom)           |
 | dockerRegistry  | false    | quay.io                 | name of the docker registry                                                        |
 | dockerRepo      | false    | oriedge                 | name of the docker repository                                                      |
 | imageName       | true     |                         | name of the docker image to be built                                               |
-| imageVersion    | false    |                         | over-ride image version ({dockerRegistry}/{dockerRepo}/{imageName}:{imageVersion}) |  
+| imageVersion    | false    |                         | explicit image version; if empty, computed from git tags via compute-version       |
 | platforms       | false    | linux/amd64,linux/arm64 | the list of platforms/architectures to compile the docker image against            |
-| push            | false    | true                    | flag to indicate if the generated docker image should be pushed or not             | 
+| push            | false    | true                    | flag to indicate if the generated docker image should be pushed or not             |
 
 ### secrets
 
@@ -69,9 +38,8 @@ to chart version. This allows dynamically inject built version to your applicati
 ```yaml
 jobs:
   docker:
-    uses: ori-edge/oge-github-actions/.github/workflows/docker.yml@v0.5.0
+    uses: ori-edge/oge-github-actions/.github/workflows/docker.yml@main
     with:
-      dockerImageMode: branch_ref
       imageName: example-app
       platforms: linux/amd64
       push: ${{ github.actor != 'dependabot[bot]' }}
@@ -99,13 +67,16 @@ jobs:
 
 ## gcp-helm-charts
 GitHub workflow to build helm charts and push to gcp. All helm charts are expected to live in `./charts` directory.
+Chart version is resolved via `compute-version`: if `chartVersion` is provided it is used directly; otherwise
+discovered from git tags.
 
 ### inputs
 
-| input          | default  | description                                             |
-|----------------|----------|---------------------------------------------------------|
-| chartPath      | N/A      | helm Chart.yaml path e.g. charts/yourapp/Chart.yaml     |
-| gcpDestination | N/A      | gcp directory where the packaged chart will be uploaded |
+| input          | required | default      | description                                                               |
+|----------------|----------|--------------|---------------------------------------------------------------------------|
+| chartsPath     | false    | ./charts/*   | path to chart files (including glob pattern)                              |
+| chartVersion   | false    |              | explicit chart version; if empty, computed from git tags                  |
+| gcpDestination | true     |              | gcp directory where the packaged chart will be uploaded                   |
 
 ### secrets
 | input              | default  | description     |
@@ -116,35 +87,36 @@ GitHub workflow to build helm charts and push to gcp. All helm charts are expect
 ```yaml
 jobs:
   gcp-helm-charts:
-    uses: ori-edge/oge-github-actions/.github/workflows/gcp-helm-charts.yml@v0.8.0
+    uses: ori-edge/oge-github-actions/.github/workflows/gcp-helm-charts.yml@main
     with:
       gcpDestination: "helm-charts"
+      chartVersion: ${{ needs.release.outputs.version }}
     secrets:
       GCP_CREDENTIALS: ${{ secrets.GCP_CREDENTIALS }}
 ```
 
 ## wait-for-deploy
-GitHub workflow to keep check deployed version (passed in `url` input with combination of `jq` input) until it matches
-helm chart (`Chart.yml`) version.
+GitHub workflow to poll a URL until the deployed version matches the expected version. Version is resolved via
+`compute-version`: if `version` is provided it is used directly; otherwise discovered from git tags.
 
 `jq` is automatically quoted, do not include surrounding single quotes. For example instead of `'.service.version'`
 use `.service.version`.
 
 ### inputs
 
-| input     | default  | description                                         |
-|-----------|----------|-----------------------------------------------------|
-| chartPath | N/A      | helm Chart.yaml path e.g. charts/yourapp/Chart.yaml |
-| url       | N/A      | url to get currently deployed version               |
-| jq        | .version | jq pattern to extract deployed version              |
+| input     | required | default  | description                                                        |
+|-----------|----------|----------|--------------------------------------------------------------------|
+| version   | false    |          | expected deployed version; if empty, computed from git tags        |
+| url       | true     |          | url to get currently deployed version                              |
+| jq        | false    | .version | jq pattern to extract deployed version                             |
 
 ### workflow example
 ```yaml
 jobs:
   wait-for-deploy:
-    uses: ori-edge/oge-github-actions/.github/workflows/wait-for-deploy.yml@v0.3.0
+    uses: ori-edge/oge-github-actions/.github/workflows/wait-for-deploy.yml@main
     with:
-      chartPath: "charts/example-app/Chart.yaml"
+      version: ${{ needs.release.outputs.version }}
       url: "https://example.com/version"
 ```
 
@@ -270,6 +242,116 @@ jobs:
       chartPath: charts/my-app
       releaseName: my-app
       valueFiles: "values.yaml,values-prod.yaml"
+```
+
+## Direct-main tagging release workflow (oge-*/ogc-* repos)
+
+`oge-*` and `ogc-*` repos use direct-main tagging: the semver tag is placed directly on the HEAD commit of `main`
+with no fishbone commit. The codebase always keeps `version: 0.0.0-dev` in `Chart.yaml` (accidental-deploy guard);
+the actual version is computed at CI time from git tags.
+
+Two new actions support this pattern:
+
+### compute-version
+
+Normalises or discovers the build version. No checkout needed — uses the GitHub API.
+
+- **Pass-through mode**: if `version` input is non-empty, outputs it immediately.
+- **Release detection**: if HEAD commit has an exact semver tag, outputs that version (`is-release: true`).
+- **Alpha mode**: otherwise computes `{next-semver}-alpha-{N}` from conventional commits since the last tag.
+
+Set `ORI_REQUIRE_RELEASE_VERSION=true` in your workflow env to fail the workflow when a non-release version is
+computed (used in release workflows to prevent deploying untagged commits).
+
+| input            | default | description                                                          |
+|------------------|---------|----------------------------------------------------------------------|
+| version          |         | explicit version (pass-through); empty = compute                     |
+| tag-parent-depth | 0       | first-parent hops from tag to main (0 = direct, 1 = fishbone)       |
+| require-release  |         | fail on pre-release; defaults to `ORI_REQUIRE_RELEASE_VERSION` env   |
+
+### tag
+
+Creates a git tag on the current HEAD commit via the GitHub API. No checkout needed.
+
+Use `auto-semver` first (to compute the version), then `tag` (to create the ref).
+
+```yaml
+release:
+  runs-on: ubuntu-latest
+  permissions:
+    contents: write
+  outputs:
+    version: ${{ steps.semver.outputs.version }}
+  steps:
+    - id: semver
+      uses: ori-edge/oge-github-actions/auto-semver@main
+      with:
+        tag-parent-depth: '0'
+      env:
+        GITHUB_TOKEN: ${{ secrets.GH_TOKEN || github.token }}
+
+    - if: steps.semver.outputs.tag != ''
+      uses: ori-edge/oge-github-actions/tag@main
+      with:
+        tag: ${{ steps.semver.outputs.tag }}
+      env:
+        GITHUB_TOKEN: ${{ secrets.GH_TOKEN || github.token }}
+```
+
+### Full release workflow example (ogc-* / oge-* repos)
+
+```yaml
+name: release
+on:
+  push:
+    branches: [main]
+
+env:
+  ORI_REQUIRE_RELEASE_VERSION: 'true'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      version: ${{ steps.semver.outputs.version }}
+    steps:
+      - id: semver
+        uses: ori-edge/oge-github-actions/auto-semver@main
+        with:
+          tag-parent-depth: '0'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN || github.token }}
+      - if: steps.semver.outputs.tag != ''
+        uses: ori-edge/oge-github-actions/tag@main
+        with:
+          tag: ${{ steps.semver.outputs.tag }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN || github.token }}
+
+  docker:
+    needs: release
+    if: needs.release.outputs.version != ''
+    uses: ori-edge/oge-github-actions/.github/workflows/docker.yml@main
+    with:
+      imageName: my-service
+      imageVersion: ${{ needs.release.outputs.version }}
+      buildArgs: version=version
+      platforms: linux/amd64
+    secrets:
+      REGISTRY_USERNAME: ${{ secrets.QUAY_USERNAME }}
+      REGISTRY_PASSWORD: ${{ secrets.QUAY_PASSWORD }}
+
+  helm-chart-museum:
+    needs: [release, docker]
+    if: needs.release.outputs.version != ''
+    uses: ori-edge/oge-github-actions/.github/workflows/gcp-helm-charts.yml@main
+    with:
+      gcpDestination: "helm-ori"
+      chartVersion: ${{ needs.release.outputs.version }}
+    secrets:
+      GCP_CREDENTIALS: ${{ secrets.GCP_CREDENTIALS }}
 ```
 
 ## Fishbone tagging release workflow
