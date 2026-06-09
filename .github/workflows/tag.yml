@@ -2,12 +2,6 @@ name: Semver tag
 
 on:
   workflow_call:
-    inputs:
-      tag-parent-depth:
-        description: "First-parent hops from tag commit to main (0 = direct-main, 1 = fishbone)"
-        required: false
-        default: "0"
-        type: string
     secrets:
       GH_TOKEN:
         description: "Bot token for tag push; falls back to github.token if not provided"
@@ -28,7 +22,7 @@ jobs:
       - id: semver
         uses: ./auto-semver
         with:
-          tag-parent-depth: ${{ inputs.tag-parent-depth }}
+          tag-parent-depth: '0'
         env:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN || github.token }}
 
