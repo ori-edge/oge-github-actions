@@ -1,48 +1,40 @@
-name: Git tag
+name: Semver tag
 
 on:
   workflow_call:
     inputs:
-      chartPath:
-        description: "helm Chart.yaml path e.g. charts/yourapp/Chart.yaml"
-        required: true
-        type: string
-      runsOn:
-        description: "github actions runner to use for this action"
-        default: "ubuntu-latest"
+      tag-parent-depth:
+        description: "First-parent hops from tag commit to main (0 = direct-main, 1 = fishbone)"
         required: false
+        default: "0"
         type: string
     secrets:
       GH_TOKEN:
-        description: "github token to use for tag creation"
+        description: "Bot token for tag push; falls back to github.token if not provided"
         required: false
+    outputs:
+      version:
+        description: "Tagged version (e.g. '1.2.3'), empty if nothing to release"
+        value: ${{ jobs.tag.outputs.version }}
 
 jobs:
-  git-tag:
-    runs-on: ${{ inputs.runsOn }}
+  tag:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      version: ${{ steps.semver.outputs.version }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
+      - id: semver
+        uses: ./auto-semver
         with:
-          fetch-depth: 0
+          tag-parent-depth: ${{ inputs.tag-parent-depth }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN || github.token }}
 
-      - name: Get helm chart version
-        run: echo "CHART_VERSION=$(grep '^version:' ${{ inputs.chartPath }} | cut -d ":" -f2 | tr -d ' ')" >> $GITHUB_ENV
-
-      - name: Create tags
-        uses: actions/github-script@v9
+      - if: steps.semver.outputs.tag != ''
+        uses: ./tag
         with:
-          github-token: ${{ secrets.GH_TOKEN || github.token }}
-          script: |
-            github.rest.git.createRef({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              ref: "refs/tags/${{ env.CHART_VERSION }}",
-              sha: context.sha
-            })
-            github.rest.git.createRef({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              ref: "refs/tags/v${{ env.CHART_VERSION }}",
-              sha: context.sha
-            })
+          tags: ${{ steps.semver.outputs.tag }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN || github.token }}
