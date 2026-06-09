@@ -1,5 +1,5 @@
 # oge-github-actions
-Shared composite GitHub Actions for ori-edge projects.
+Shared GitHub Actions for ori-edge projects.
 
 Projects use git semver tags as the release version for docker images, application version, and helm charts.
 Everything is consistent (docker tag matches git tag matches helm chart version — easier to debug and rollback).
@@ -20,18 +20,63 @@ When testing a **release workflow** specifically (one that creates tags or publi
 pin becomes unresolvable, whereas a SHA remains reachable from GitHub and keeps the release reproducible.
 Switch back to a version tag once testing is complete.
 
-> **Composite actions vs reusable workflows:** all shared actions in this repo are composite actions (not
-> reusable workflows). Secrets cannot be passed directly to composite actions; instead, set them as `env:`
-> vars on the calling step — the runner masks them automatically because they originate from the `secrets`
-> context. Boolean-typed inputs in reusable workflows are `string` inputs in composite actions (`'true'`/
-> `'false'`).
+> **Composite actions are preferred.** The [composite actions](#composite-actions) below wrap the lower-level
+> [JavaScript actions](#javascript-actions) with opinionated, tested defaults. Use a composite action unless
+> you need behaviour that only the underlying JS action exposes.
+>
+> Key differences from reusable workflows: secrets cannot be passed directly to composite actions — set them
+> as `env:` vars on the calling step (the runner masks them automatically). Boolean-typed inputs are always
+> `string` inputs in composite actions (`'true'`/`'false'`).
 
-## docker-build
-Composite action to check out the caller's repo, compute the image version, and build/push a Docker image.
+---
+
+## Composite actions
+
+### tag-semver
+
+Convenience composite action combining `auto-semver` + `tag`. Computes the next semver from conventional
+commits since the last tag and creates the tag on HEAD via the GitHub API. No checkout required.
+
+If HEAD is already tagged, outputs the current version and skips tag creation (safe on re-runs).
+
+#### env vars (pass as env: on the step)
+
+| var          | description                              |
+|--------------|------------------------------------------|
+| GITHUB_TOKEN | GitHub token with `contents: write` permission |
+
+#### outputs
+
+| output  | description                                              |
+|---------|----------------------------------------------------------|
+| version | semver string without leading v, e.g. `1.2.3`           |
+| tag     | empty string when HEAD was already tagged (nothing done) |
+
+#### example
+
+```yaml
+release:
+  runs-on: ubuntu-latest
+  permissions:
+    contents: write
+  outputs:
+    version: ${{ steps.tag.outputs.version }}
+  steps:
+    - id: tag
+      uses: ori-edge/oge-github-actions/tag-semver@v0.23.0
+      env:
+        GITHUB_TOKEN: ${{ secrets.GH_TOKEN || github.token }}
+```
+
+---
+
+### docker-build
+
+Checks out the caller's repo, computes the image version, and builds/pushes a Docker image.
 Version is resolved via `compute-version`: if `imageVersion` is provided it is used directly; otherwise
 discovered from git tags.
 
-### inputs
+#### inputs
 
 | input          | required | default                 | description                                                                  |
 |----------------|----------|-------------------------|------------------------------------------------------------------------------|
@@ -45,20 +90,22 @@ discovered from git tags.
 | platforms      | false    | linux/amd64,linux/arm64 | comma-separated list of platforms to build for                               |
 | push           | false    | true                    | `'true'` to push the image to the registry                                   |
 
-### env vars (pass as env: on the step)
+#### env vars (pass as env: on the step)
 
 | var               | description              |
 |-------------------|--------------------------|
 | REGISTRY_USERNAME | docker registry username |
 | REGISTRY_PASSWORD | docker registry password |
+| GITHUB_TOKEN      | used by compute-version to discover the version from git tags |
 
-### example
+#### example
+
 ```yaml
 jobs:
   docker:
     runs-on: ubuntu-latest
     steps:
-      - uses: ori-edge/oge-github-actions/docker-build@v0.23.0  # pin to the latest release
+      - uses: ori-edge/oge-github-actions/docker-build@v0.23.0
         with:
           imageName: example-app
           platforms: linux/amd64
@@ -69,17 +116,21 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
 ```
 
-## docker-scan
-Composite action to build a Docker image and scan it with [Trivy](https://github.com/aquasecurity/trivy).
+---
+
+### docker-scan
+
+Builds a Docker image and scans it with [Trivy](https://github.com/aquasecurity/trivy).
 Fails on unfixed CRITICAL or HIGH CVEs.
 
-### inputs
+#### inputs
 
 | input        | default | description          |
 |--------------|---------|----------------------|
 | buildContext | .       | docker build context |
 
-### example
+#### example
+
 ```yaml
 jobs:
   docker-scan:
@@ -88,12 +139,15 @@ jobs:
       - uses: ori-edge/oge-github-actions/docker-scan@v0.23.0
 ```
 
-## gcp-helm-charts
-Composite action to package Helm charts and upload to GCP Cloud Storage. All Helm charts are expected
-to live in `./charts`. Chart version is resolved via `compute-version`: if `chartVersion` is provided
-it is used directly; otherwise discovered from git tags.
+---
 
-### inputs
+### gcp-helm-charts
+
+Packages Helm charts and uploads to GCP Cloud Storage. All Helm charts are expected to live in `./charts`.
+Chart version is resolved via `compute-version`: if `chartVersion` is provided it is used directly;
+otherwise discovered from git tags.
+
+#### inputs
 
 | input          | required | default    | description                                              |
 |----------------|----------|------------|----------------------------------------------------------|
@@ -101,19 +155,21 @@ it is used directly; otherwise discovered from git tags.
 | chartVersion   | false    |            | explicit chart version; if empty, computed from git tags |
 | gcpDestination | true     |            | GCP directory where the packaged chart will be uploaded  |
 
-### env vars (pass as env: on the step)
+#### env vars (pass as env: on the step)
 
-| var            | description     |
-|----------------|-----------------|
+| var             | description     |
+|-----------------|-----------------|
 | GCP_CREDENTIALS | GCP credentials |
+| GITHUB_TOKEN    | used by compute-version to discover the version from git tags |
 
-### example
+#### example
+
 ```yaml
 jobs:
   gcp-helm-charts:
     runs-on: ubuntu-latest
     steps:
-      - uses: ori-edge/oge-github-actions/gcp-helm-charts@v0.23.0  # pin to the latest release
+      - uses: ori-edge/oge-github-actions/gcp-helm-charts@v0.23.0
         with:
           gcpDestination: "helm-charts"
           chartVersion: ${{ needs.release.outputs.version }}
@@ -122,13 +178,16 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
 ```
 
-## wait-for-deploy
-Composite action to poll a URL until the deployed version matches the expected version. Version is resolved
-via `compute-version`: if `version` is provided it is used directly; otherwise discovered from git tags.
+---
+
+### wait-for-deploy
+
+Polls a URL until the deployed version matches the expected version. Version is resolved via
+`compute-version`: if `version` is provided it is used directly; otherwise discovered from git tags.
 
 `jq` is automatically quoted — do not include surrounding single quotes. Use `.service.version` not `'.service.version'`.
 
-### inputs
+#### inputs
 
 | input   | required | default  | description                                               |
 |---------|----------|----------|-----------------------------------------------------------|
@@ -136,13 +195,20 @@ via `compute-version`: if `version` is provided it is used directly; otherwise d
 | url     | true     |          | URL to poll for the currently deployed version            |
 | jq      | false    | .version | jq expression to extract the version from the response    |
 
-### example
+#### env vars (pass as env: on the step)
+
+| var          | description |
+|--------------|-------------|
+| GITHUB_TOKEN | used by compute-version to discover the version from git tags |
+
+#### example
+
 ```yaml
 jobs:
   wait-for-deploy:
     runs-on: ubuntu-latest
     steps:
-      - uses: ori-edge/oge-github-actions/wait-for-deploy@v0.23.0  # pin to the latest release
+      - uses: ori-edge/oge-github-actions/wait-for-deploy@v0.23.0
         with:
           version: ${{ needs.release.outputs.version }}
           url: "https://example.com/version"
@@ -150,10 +216,13 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
 ```
 
-## go-unit-test
-Composite action to run Go unit tests and optionally upload coverage to Codecov.
+---
 
-### inputs
+### go-unit-test
+
+Runs Go unit tests and optionally uploads coverage to Codecov.
+
+#### inputs
 
 | input            | required | default                  | description                                            |
 |------------------|----------|--------------------------|--------------------------------------------------------|
@@ -164,16 +233,16 @@ Composite action to run Go unit tests and optionally upload coverage to Codecov.
 | loginDocker      | false    | `'false'`                | `'true'` if tests need private docker registry access  |
 | dockerRegistry   | false    | quay.io                  | docker registry hostname                               |
 
-### env vars (pass as env: on the step)
+#### env vars (pass as env: on the step)
 
-| var               | when required         | description              |
-|-------------------|-----------------------|--------------------------|
-| CODECOV_TOKEN     | uploadToCodecov=true  | Codecov upload token     |
-| REGISTRY_USERNAME | loginDocker=true      | docker registry username |
-| REGISTRY_PASSWORD | loginDocker=true      | docker registry password |
-| GH_TOKEN          | private modules       | GitHub PAT               |
+| var               | when required        | description              |
+|-------------------|----------------------|--------------------------|
+| CODECOV_TOKEN     | uploadToCodecov=true | Codecov upload token     |
+| REGISTRY_USERNAME | loginDocker=true     | docker registry username |
+| REGISTRY_PASSWORD | loginDocker=true     | docker registry password |
+| GH_TOKEN          | private modules      | GitHub PAT               |
 
-### example
+#### example
 
 ```yaml
 jobs:
@@ -187,10 +256,13 @@ jobs:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 ```
 
-## go-integration-test
-Composite action to run Go integration tests (supports docker registry login if private images are required).
+---
 
-### inputs
+### go-integration-test
+
+Runs Go integration tests (supports docker registry login if private images are required).
+
+#### inputs
 
 | input                 | required | default          | description                                                |
 |-----------------------|----------|------------------|------------------------------------------------------------|
@@ -204,7 +276,7 @@ Composite action to run Go integration tests (supports docker registry login if 
 | coverageFilePath      | false    | ./artifacts/integration-coverage.txt | path to coverage report           |
 | buildArtifactName     | false    |                  | artifact to download before running tests                  |
 
-### env vars (pass as env: on the step)
+#### env vars (pass as env: on the step)
 
 | var               | when required              | description              |
 |-------------------|----------------------------|--------------------------|
@@ -213,7 +285,7 @@ Composite action to run Go integration tests (supports docker registry login if 
 | REGISTRY_PASSWORD | loginToDockerRegistry=true | docker registry password |
 | GH_TOKEN          | private modules            | GitHub PAT               |
 
-### example
+#### example
 
 ```yaml
 jobs:
@@ -232,27 +304,30 @@ jobs:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 ```
 
-## govulncheck
-Composite action to run Go vulnerability checking using [govulncheck](https://pkg.go.dev/golang.org/x/vuln/cmd/govulncheck).
+---
+
+### govulncheck
+
+Runs Go vulnerability checking using [govulncheck](https://pkg.go.dev/golang.org/x/vuln/cmd/govulncheck).
 Distinguishes between:
 - Fixable vulnerabilities called by your code (fails by default)
 - Fixable vulnerabilities in dependencies not called by your code (warning)
 - Vulnerabilities without available fixes (warning)
 
-### inputs
+#### inputs
 
-| input                        | required | default | description                                                          |
-|------------------------------|----------|---------|----------------------------------------------------------------------|
-| goVersionFile                | false    | go.mod  | path to file containing Go version; ignored when mise.toml is present |
+| input                        | required | default  | description                                                           |
+|------------------------------|----------|----------|-----------------------------------------------------------------------|
+| goVersionFile                | false    | go.mod   | path to file containing Go version; ignored when mise.toml is present |
 | failOnFixableVulnerabilities | false    | `'true'` | `'true'` to fail when fixable vulnerabilities are found in code paths |
 
-### env vars (pass as env: on the step)
+#### env vars (pass as env: on the step)
 
 | var      | when required   | description |
 |----------|-----------------|-------------|
 | GH_TOKEN | private modules | GitHub PAT  |
 
-### example
+#### example
 
 ```yaml
 jobs:
@@ -262,21 +337,13 @@ jobs:
       - uses: ori-edge/oge-github-actions/govulncheck@v0.23.0
 ```
 
-With custom settings:
-```yaml
-jobs:
-  govulncheck:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: ori-edge/oge-github-actions/govulncheck@v0.23.0
-        with:
-          failOnFixableVulnerabilities: 'false'  # only warn, don't fail
-```
+---
 
-## helm-lint
-Composite action to lint Helm charts and optionally validate they render correctly.
+### helm-lint
 
-### inputs
+Lints Helm charts and optionally validates they render correctly.
+
+#### inputs
 
 | input                  | required | default      | description                                              |
 |------------------------|----------|--------------|----------------------------------------------------------|
@@ -288,7 +355,7 @@ Composite action to lint Helm charts and optionally validate they render correct
 | additionalLintArgs     | false    |              | additional arguments to pass to helm lint                |
 | additionalTemplateArgs | false    |              | additional arguments to pass to helm template            |
 
-### example
+#### example
 
 ```yaml
 jobs:
@@ -301,61 +368,13 @@ jobs:
           releaseName: my-app
 ```
 
-With custom values files:
-```yaml
-jobs:
-  helm-lint:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: ori-edge/oge-github-actions/helm-lint@v0.23.0
-        with:
-          chartPath: charts/my-app
-          releaseName: my-app
-          valueFiles: "values.yaml,values-prod.yaml"
-```
+---
 
 ## Direct-main tagging release workflow
 
 With direct-main tagging the semver tag is placed directly on the HEAD commit of `main`
 with no fishbone commit. The codebase keeps `version: 0.0.0-dev` in `Chart.yaml` (accidental-deploy guard);
 the actual version is computed at CI time from git tags.
-
-### tag-semver
-Convenience composite action that combines `auto-semver` + `tag`. No checkout needed.
-Outputs the tagged version, or empty string if there is nothing to release.
-
-```yaml
-release:
-  runs-on: ubuntu-latest
-  permissions:
-    contents: write
-  outputs:
-    version: ${{ steps.tag.outputs.version }}
-  steps:
-    - id: tag
-      uses: ori-edge/oge-github-actions/tag-semver@v0.23.0  # pin to the latest release
-      env:
-        GITHUB_TOKEN: ${{ secrets.GH_TOKEN || github.token }}
-```
-
-### compute-version
-
-Normalises or discovers the build version. No checkout needed — uses the GitHub API.
-
-- **Pass-through mode**: if `version` input is non-empty, outputs it immediately.
-- **Release detection**: if HEAD commit has an exact semver tag, outputs that version (`is-release: true`).
-- **Alpha mode**: otherwise computes `{next-semver}-alpha-{N}` from conventional commits since the last tag.
-
-Set `ORI_REQUIRE_RELEASE_VERSION=true` in your workflow env to fail the workflow when a non-release version is
-computed (used in release workflows to prevent deploying untagged commits).
-
-| input            | default | description                                                        |
-|------------------|---------|--------------------------------------------------------------------|
-| version          |         | explicit version (pass-through); empty = compute                   |
-| tag-parent-depth | 0       | first-parent hops from tag to main (0 = direct, 1 = fishbone)     |
-| require-release  |         | fail on pre-release; defaults to `ORI_REQUIRE_RELEASE_VERSION` env |
-
-### Full release workflow example
 
 ```yaml
 name: release
@@ -375,16 +394,15 @@ jobs:
       version: ${{ steps.tag.outputs.version }}
     steps:
       - id: tag
-        uses: ori-edge/oge-github-actions/tag-semver@v0.23.0  # pin to the latest release
+        uses: ori-edge/oge-github-actions/tag-semver@v0.23.0
         env:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN || github.token }}
 
   docker:
     needs: release
-    if: needs.release.outputs.version != ''
     runs-on: ubuntu-latest
     steps:
-      - uses: ori-edge/oge-github-actions/docker-build@v0.23.0  # pin to the latest release
+      - uses: ori-edge/oge-github-actions/docker-build@v0.23.0
         with:
           imageName: my-service
           imageVersion: ${{ needs.release.outputs.version }}
@@ -397,10 +415,9 @@ jobs:
 
   helm-chart-museum:
     needs: [release, docker]
-    if: needs.release.outputs.version != ''
     runs-on: ubuntu-latest
     steps:
-      - uses: ori-edge/oge-github-actions/gcp-helm-charts@v0.23.0  # pin to the latest release
+      - uses: ori-edge/oge-github-actions/gcp-helm-charts@v0.23.0
         with:
           gcpDestination: "helm-ori"
           chartVersion: ${{ needs.release.outputs.version }}
@@ -409,65 +426,253 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
 ```
 
+`ORI_REQUIRE_RELEASE_VERSION: 'true'` causes `compute-version` (inside `docker-build` and `gcp-helm-charts`)
+to fail if the version is not an exact release. This prevents deploying untagged commits. `GH_TOKEN` is an
+org secret — `secrets.GH_TOKEN || github.token` works across all repos.
+
+---
+
+## JavaScript actions
+
+These are lower-level primitives. The composite actions above build on them. Use a JavaScript action
+directly only when you need behaviour that no composite action exposes (e.g. creating floating tag aliases,
+or building your own release composite action).
+
+### auto-semver
+
+Computes the next semver version from conventional commits since the last tag using the GitHub API.
+No checkout required.
+
+If HEAD is already tagged with a semver tag, outputs that version and sets `tag` to empty (no new tag
+needed). This makes the action safe on re-runs.
+
+Bump rules: `feat!:` → major, `feat:` → minor, everything else (including non-conventional messages) →
+patch.
+
+#### inputs
+
+| input            | required | default | description                                                                                              |
+|------------------|----------|---------|----------------------------------------------------------------------------------------------------------|
+| tag-parent-depth | false    | `1`     | first-parent hops from the tag's commit to find the main-branch ancestor. `0` for direct-main; `1` for fishbone |
+
+#### env vars (pass as env: on the step)
+
+| var          | description          |
+|--------------|----------------------|
+| GITHUB_TOKEN | GitHub token (read-only scope is enough) |
+
+#### outputs
+
+| output  | description                                                    |
+|---------|----------------------------------------------------------------|
+| version | next semver string without leading v, e.g. `1.2.3`; empty when nothing to release |
+| tag     | next tag string, e.g. `v1.2.3`; empty when nothing to release |
+| bump    | bump type applied: `major`, `minor`, or `patch`; empty when nothing to release |
+
+#### example
+
+```yaml
+- id: semver
+  uses: ori-edge/oge-github-actions/auto-semver@v0.23.0
+  with:
+    tag-parent-depth: '0'   # direct-main tagging
+  env:
+    GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+```
+
+---
+
+### compute-version
+
+Normalises or discovers the build version. No checkout required — uses the GitHub API.
+
+- **Pass-through**: if `version` input is non-empty, outputs it immediately.
+- **Release detection**: if HEAD has an exact semver tag, outputs that version (`is-release: 'true'`).
+- **Alpha mode**: otherwise computes `{next-semver}-alpha-{N}` from conventional commits since the last tag.
+
+Set `ORI_REQUIRE_RELEASE_VERSION=true` in the workflow env to fail when a non-release version is computed.
+
+#### inputs
+
+| input            | required | default | description                                                               |
+|------------------|----------|---------|---------------------------------------------------------------------------|
+| version          | false    |         | explicit version (pass-through); empty = compute from git tags            |
+| tag-parent-depth | false    | `0`     | first-parent hops from tag to main. `0` = direct-main, `1` = fishbone    |
+| require-release  | false    |         | fail on pre-release; defaults to `ORI_REQUIRE_RELEASE_VERSION` env var   |
+
+#### env vars (pass as env: on the step)
+
+| var          | description          |
+|--------------|----------------------|
+| GITHUB_TOKEN | GitHub token (read-only scope is enough) |
+
+#### outputs
+
+| output     | description                                                  |
+|------------|--------------------------------------------------------------|
+| version    | e.g. `1.2.3` or `1.2.3-alpha-5`                             |
+| tag        | e.g. `v1.2.3` or `v1.2.3-alpha-5`                           |
+| is-release | `'true'` when version is an exact release (no pre-release suffix) |
+
+#### example
+
+```yaml
+- id: cv
+  uses: ori-edge/oge-github-actions/compute-version@v0.23.0
+  env:
+    GITHUB_TOKEN: ${{ github.token }}
+
+- run: echo "Building version ${{ steps.cv.outputs.version }}"
+```
+
+---
+
+### tag
+
+Creates git tags on the current HEAD commit via the GitHub API. No checkout required. Supports floating
+tags (force-updated on each run) and idempotent re-runs via `continue-if-exists`.
+
+#### inputs
+
+| input             | required | default   | description                                                                                           |
+|-------------------|----------|-----------|-------------------------------------------------------------------------------------------------------|
+| tags              | false    |           | comma-separated tags to create on HEAD; fails if any already exists (unless `continue-if-exists`)     |
+| floating-tags     | false    |           | comma-separated floating tags to force-update to HEAD, e.g. `v1.2,v1` as aliases for `v1.2.3`       |
+| continue-if-exists| false    | `'false'` | `'true'` to skip (rather than fail) when a tag already exists at HEAD; fails if it points elsewhere  |
+| ignore-no-op      | false    | `'false'` | `'true'` to allow invocation with no tags specified; otherwise the action fails                       |
+
+#### env vars (pass as env: on the step)
+
+| var          | description                                     |
+|--------------|-------------------------------------------------|
+| GITHUB_TOKEN | GitHub token with `contents: write` permission  |
+
+#### outputs
+
+| output  | description                                                            |
+|---------|------------------------------------------------------------------------|
+| created | comma-separated list of tags created on HEAD                           |
+| skipped | comma-separated list of tags that already existed at HEAD (continue-if-exists only) |
+
+#### example
+
+```yaml
+# Create a release tag and floating major/minor aliases
+- uses: ori-edge/oge-github-actions/tag@v0.23.0
+  with:
+    tags: v1.2.3
+    floating-tags: v1.2,v1
+  env:
+    GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+```
+
+---
+
+### tag-helm-release
+
+Creates a fishbone release tag by patching `Chart.yaml` and `values.yaml` via the GitHub API,
+committing off HEAD, and pushing the tag. The main branch is never modified. No checkout required.
+
+Used by `ope-*` repos where the version must be encoded in source. For `oge-*`/`ogc-*` repos use
+direct-main tagging with `tag-semver` instead.
+
+#### inputs
+
+| input            | required | default                                              | description                                                                                   |
+|------------------|----------|------------------------------------------------------|-----------------------------------------------------------------------------------------------|
+| version          | true     |                                                      | semver string without leading v, e.g. `1.2.3`. Typically `auto-semver` `version` output      |
+| tag              | true     |                                                      | tag ref to create, e.g. `v1.2.3`. Typically `auto-semver` `tag` output                       |
+| chart-dir        | true     |                                                      | path to the directory containing `Chart.yaml` and `values.yaml`, e.g. `dist/chart`           |
+| image-repositories | true   |                                                      | comma-separated `repository:` values to match in `values.yaml`; only matching image blocks are updated |
+| pull-policy      | false    | IfNotPresent                                         | `imagePullPolicy` to set on matching image blocks                                             |
+| committer-name   | false    | github-actions[bot]                                  | commit author name; must match the token identity for GitHub to mark the commit verified      |
+| committer-email  | false    | 41898282+github-actions[bot]@users.noreply.github.com | commit author email                                                                          |
+
+#### env vars (pass as env: on the step)
+
+| var          | description                                                                              |
+|--------------|------------------------------------------------------------------------------------------|
+| GITHUB_TOKEN | GitHub token with `contents: write` permission (use a bot token for verified commits)    |
+
+#### outputs
+
+| output | description                                    |
+|--------|------------------------------------------------|
+| commit | SHA of the fishbone commit created off HEAD    |
+
+#### example
+
+```yaml
+- id: semver
+  uses: ori-edge/oge-github-actions/auto-semver@v0.23.0
+  env:
+    GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+- if: steps.semver.outputs.tag != ''
+  uses: ori-edge/oge-github-actions/tag-helm-release@v0.23.0
+  with:
+    version: ${{ steps.semver.outputs.version }}
+    tag: ${{ steps.semver.outputs.tag }}
+    chart-dir: dist/chart
+    image-repositories: ghcr.io/ori-edge/my-service
+    committer-name: "My Bot"
+    committer-email: "my-bot@users.noreply.github.com"
+  env:
+    GITHUB_TOKEN: ${{ secrets.BOT_TOKEN }}
+```
+
+---
+
 ## Fishbone tagging release workflow
 
-Repositories where version must be encoded in source (e.g. in a Helm `Chart.yaml`) can use a fishbone tagging release strategy with automatic [semantic versioning](https://semver.org/) derived from [conventional commits](https://www.conventionalcommits.org/en/v1.0.0/).
+Repositories where the version must be encoded in source (e.g. in a Helm `Chart.yaml`) use a fishbone
+tagging strategy with automatic [semantic versioning](https://semver.org/) derived from [conventional commits](https://www.conventionalcommits.org/en/v1.0.0/).
 
 Fishbone tagging is where the tag that is pushed is a commit that is never merged back to the main branch.
-In Git, tags are pointers to commits and the commits do not have ever been on any branch in order to be tagged.
+In Git, tags are pointers to commits and the commits do not have to be on any branch in order to be tagged.
 The fishbone name originates from the resulting commit graph shape where the tags resemble fishbone spines:
 
 ![commits with fishbone tags](images/fishbone-tags.png)
 
-The fishbone tagging strategy helps solve a common issue when it is necessary to encode the version number in the source code tree itself.
-This can cause a lot of merge conflict issues as typically *either* every pull request needs to know in advance what version it will be when merged, which causes any other pull requests in flight to conflict once one is merged, *or* there needs to be a special workflow that updates the main branch version causing conflicts for developers and risking looping by the CI engine.
+The fishbone tagging strategy helps solve a common issue when it is necessary to encode the version number
+in the source code tree itself. This can cause merge conflict issues: either every pull request needs to
+know in advance what version it will be when merged (causing conflicts once one is merged), or there needs
+to be a special workflow that updates the main branch version (causing conflicts for developers and risking
+looping by the CI engine).
 
-With a fishbone tagging, the version on the main branch stays at the lowest possible version, typically with a qualifier, e.g. `0.0.0-dev` this will ensure that any system automatically upgrading to the latest version will not see the development version as new.
-Then the workflow that creates the tag will build a new commit with the version file updated and tag that commit without pushing it back to the main branch.
-This eliminates the churn on the main branch.
+With fishbone tagging the version on the main branch stays at the lowest possible version, typically with
+a qualifier, e.g. `0.0.0-dev`. The workflow that creates the tag builds a new commit with the version file
+updated and tags that commit without pushing it back to the main branch. This eliminates the churn on the
+main branch.
 
-We have two actions that can be used to support fishbone tagging with semantic versioning driven by conventional commits: [auto-semver](./auto-semver) and [tag-helm-release](./tag-helm-release).
-The tag job will look something like this:
+The version number is automatically incremented from conventional commits:
+- `feat!:` → major bump
+- `feat:` → minor bump
+- `fix:`, `chore:`, or non-conventional messages → patch bump
 
 ```yaml
   git-tag:
     name: Create Release Tag
     if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     runs-on: ubuntu-latest
-
     steps:
       - name: Compute next version
         id: semver
-        uses: ori-edge/oge-github-actions/auto-semver@v0.19.2
+        uses: ori-edge/oge-github-actions/auto-semver@v0.23.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Create Helm release tag
         if: steps.semver.outputs.tag != ''
-        uses: ori-edge/oge-github-actions/tag-helm-release@v0.19.2
-        env:
-          # we need to use a bot token, so that the release workflow can be triggered
-          # to get a verified commit the BOT token must have been issued for a GitHub
-          # App that you own and that has write permission against the repo to tag
-          # you will also need to set the committer name and email correctly in order
-          # for GitHub to see the commit as verified.
-          GITHUB_TOKEN: ${{ secrets.BOT_TOKEN }}
+        uses: ori-edge/oge-github-actions/tag-helm-release@v0.23.0
         with:
-          version: "${{ steps.semver.outputs.version }}"
-          tag: "${{ steps.semver.outputs.tag }}"
-          chart-dir: "dist/chart"
-          image-repositories: "ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}"
+          version: ${{ steps.semver.outputs.version }}
+          tag: ${{ steps.semver.outputs.tag }}
+          chart-dir: dist/chart
+          image-repositories: ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}
           committer-name: "YOUR BOT NAME GOES HERE"
           committer-email: "YOUR BOT EMAIL GOES HERE"
+        env:
+          # Use a bot token so the release workflow can be triggered and the commit is verified.
+          GITHUB_TOKEN: ${{ secrets.BOT_TOKEN }}
 ```
-
-With the above job in a workflow that runs on merge to main or, for manual tagging, using a workflow dispatch you will get new tags every time it runs (assuming there have been changes since the last run).
-
-The version number will be automatically incremented based on the commit messages:
-
-* commit messages that start with `feat!:` will cause a major version bump.
-* otherwise, commit messages that start with `feat:` will cause a minor version bump.
-* otherwise, commit messages that start with `fix:` or `chore:` or that fail to parse as valid conventional commits will only cause a patch bump.
-* see [conventional commits](https://www.conventionalcommits.org/en/v1.0.0/) for the full details.
-
-Note: existing tags following semver will always be considered, so if the workflow gets stuck, manually pushing a tag should unstick.
