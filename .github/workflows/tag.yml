@@ -19,6 +19,11 @@ jobs:
     outputs:
       version: ${{ steps.semver.outputs.version }}
     steps:
+      - uses: actions/checkout@v6
+        with:
+          repository: ori-edge/oge-github-actions
+          ref: ${{ github.workflow_sha }}
+
       - id: semver
         uses: ./auto-semver
         with:
