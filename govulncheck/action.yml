@@ -1,0 +1,108 @@
+name: "Go vulnerability check"
+description: >
+  Checks out the caller's repo, sets up Go via mise, and runs govulncheck.
+  Fails if fixable vulnerabilities are found in code paths (configurable).
+  Pass GH_TOKEN as an env var on the step if private module access is needed.
+inputs:
+  goVersionFile:
+    description: "path to file containing Go version (e.g., go.mod); ignored when mise.toml is present"
+    default: "go.mod"
+    required: false
+  failOnFixableVulnerabilities:
+    description: "'true' to fail when fixable vulnerabilities are found in code paths"
+    default: "true"
+    required: false
+runs:
+  using: composite
+  steps:
+    - name: Check out
+      uses: actions/checkout@v6
+
+    - name: Create mise.toml from goVersionFile
+      if: hashFiles('mise.toml') == ''
+      shell: bash
+      run: |
+        ver=$(grep -m1 '^go ' "${{ inputs.goVersionFile }}" | awk '{print $2}' \
+              || cat "${{ inputs.goVersionFile }}")
+        printf '[tools]\ngo = "%s"\n' "$ver" > mise.toml
+
+    - name: Setup mise
+      uses: jdx/mise-action@v4
+      env:
+        MISE_GO_SET_GOBIN: 'false'
+
+    - name: Setup Go
+      uses: actions/setup-go@v6
+      with:
+        cache-dependency-path: |
+          go.sum
+          mise.toml
+
+    - name: Configure GitHub authentication
+      shell: bash
+      run: |
+        if [ -n "${GH_TOKEN}" ]; then
+          git config --global url."https://${GH_TOKEN}@github.com/ori-edge/".insteadOf "https://github.com/ori-edge/"
+        fi
+
+    - name: Add GOBIN to PATH
+      shell: bash
+      run: echo "$(go env GOBIN)" >> $GITHUB_PATH
+
+    - name: Run govulncheck
+      shell: bash
+      run: |
+        go install golang.org/x/vuln/cmd/govulncheck@latest
+
+        # Run with JSON output and capture result
+        govulncheck -json ./... > vulns.json 2>&1 || true
+
+        # Always show human-readable output first
+        echo "=== govulncheck results ==="
+        govulncheck ./... 2>&1 || true
+        echo "==========================="
+
+        # Analyze vulnerabilities using jq
+        # - Group by OSV ID
+        # - Check if fix is available (fixed_version field exists)
+        # - Check if code actually calls vulnerable function (trace has position field)
+        ANALYSIS=$(jq -s '
+          [.[] | select(.finding)] |
+          group_by(.finding.osv) |
+          map({
+            osv: .[0].finding.osv,
+            has_fix: ([.[] | select(.finding.fixed_version)] | length > 0),
+            is_called: ([.[] | select(.finding.trace[0].position)] | length > 0)
+          })
+        ' vulns.json)
+
+        TOTAL=$(echo "$ANALYSIS" | jq 'length')
+        CALLED_WITH_FIX=$(echo "$ANALYSIS" | jq '[.[] | select(.has_fix and .is_called)] | length')
+        CALLED_NO_FIX=$(echo "$ANALYSIS" | jq '[.[] | select(.is_called and (.has_fix | not))] | length')
+        NOT_CALLED_WITH_FIX=$(echo "$ANALYSIS" | jq '[.[] | select(.has_fix and (.is_called | not))] | length')
+
+        echo "Summary:"
+        echo "  Total vulnerabilities: $TOTAL"
+        echo "  Called by code with fix available: $CALLED_WITH_FIX (action required)"
+        echo "  Called by code without fix: $CALLED_NO_FIX (no action possible)"
+        echo "  Not called but fixable: $NOT_CALLED_WITH_FIX (low priority)"
+
+        if [ "$CALLED_WITH_FIX" -gt 0 ]; then
+          echo ""
+          echo "Fixable vulnerabilities that your code calls:"
+          echo "$ANALYSIS" | jq -r '.[] | select(.has_fix and .is_called) | "  - \(.osv)"'
+          if [ "${{ inputs.failOnFixableVulnerabilities }}" = "true" ]; then
+            echo "::error::Fixable vulnerabilities found in code paths - please update dependencies"
+            exit 1
+          else
+            echo "::warning::Fixable vulnerabilities found in code paths - please update dependencies"
+          fi
+        elif [ "$NOT_CALLED_WITH_FIX" -gt 0 ]; then
+          echo "::warning::Fixable vulnerabilities in dependencies (not called by your code)"
+        fi
+
+        if [ "$CALLED_NO_FIX" -gt 0 ]; then
+          echo "::warning::Vulnerabilities found in code paths but no fixes available yet"
+        fi
+
+        exit 0

@@ -5219,7 +5219,6 @@ function defaultFactory (origin, opts) {
 
 class Agent extends DispatcherBase {
   constructor ({ factory = defaultFactory, maxRedirections = 0, connect, ...options } = {}) {
-
     if (typeof factory !== 'function') {
       throw new InvalidArgumentError('factory must be a function.')
     }
@@ -5827,27 +5826,69 @@ class Parser {
 
       const offset = llhttp.llhttp_get_error_pos(this.ptr) - currentBufferPtr
 
-      if (ret === constants.ERROR.PAUSED_UPGRADE) {
-        this.onUpgrade(data.slice(offset))
-      } else if (ret === constants.ERROR.PAUSED) {
-        this.paused = true
-        socket.unshift(data.slice(offset))
-      } else if (ret !== constants.ERROR.OK) {
-        const ptr = llhttp.llhttp_get_error_reason(this.ptr)
-        let message = ''
-        /* istanbul ignore else: difficult to make a test case for */
-        if (ptr) {
-          const len = new Uint8Array(llhttp.memory.buffer, ptr).indexOf(0)
-          message =
-            'Response does not match the HTTP/1.1 protocol (' +
-            Buffer.from(llhttp.memory.buffer, ptr, len).toString() +
-            ')'
+      if (ret !== constants.ERROR.OK) {
+        const body = data.subarray(offset)
+
+        if (ret === constants.ERROR.PAUSED_UPGRADE) {
+          this.onUpgrade(body)
+        } else if (ret === constants.ERROR.PAUSED) {
+          this.paused = true
+          socket.unshift(body)
+        } else {
+          throw this.createError(ret, body)
         }
-        throw new HTTPParserError(message, constants.ERROR[ret], data.slice(offset))
       }
     } catch (err) {
       util.destroy(socket, err)
     }
+  }
+
+  finish () {
+    assert(currentParser === null)
+    assert(this.ptr != null)
+    assert(!this.paused)
+
+    const { llhttp } = this
+
+    let ret
+
+    try {
+      currentParser = this
+      ret = llhttp.llhttp_finish(this.ptr)
+    } finally {
+      currentParser = null
+    }
+
+    if (ret === constants.ERROR.OK) {
+      return null
+    }
+
+    if (ret === constants.ERROR.PAUSED || ret === constants.ERROR.PAUSED_UPGRADE) {
+      this.paused = true
+      return null
+    }
+
+    return this.createError(ret, EMPTY_BUF)
+  }
+
+  createError (ret, data) {
+    const { llhttp, contentLength, bytesRead } = this
+
+    if (contentLength && bytesRead !== parseInt(contentLength, 10)) {
+      return new ResponseContentLengthMismatchError()
+    }
+
+    const ptr = llhttp.llhttp_get_error_reason(this.ptr)
+    let message = ''
+    if (ptr) {
+      const len = new Uint8Array(llhttp.memory.buffer, ptr).indexOf(0)
+      message =
+        'Response does not match the HTTP/1.1 protocol (' +
+        Buffer.from(llhttp.memory.buffer, ptr, len).toString() +
+        ')'
+    }
+
+    return new HTTPParserError(message, constants.ERROR[ret], data)
   }
 
   destroy () {
@@ -6221,8 +6262,11 @@ async function connectH1 (client, socket) {
     // On Mac OS, we get an ECONNRESET even if there is a full body to be forwarded
     // to the user.
     if (err.code === 'ECONNRESET' && parser.statusCode && !parser.shouldKeepAlive) {
-      // We treat all incoming data so for as a valid response.
-      parser.onMessageComplete()
+      const parserErr = parser.finish()
+      if (parserErr) {
+        this[kError] = parserErr
+        this[kClient][kOnError](parserErr)
+      }
       return
     }
 
@@ -6241,8 +6285,10 @@ async function connectH1 (client, socket) {
     const parser = this[kParser]
 
     if (parser.statusCode && !parser.shouldKeepAlive) {
-      // We treat all incoming data so far as a valid response.
-      parser.onMessageComplete()
+      const parserErr = parser.finish()
+      if (parserErr) {
+        util.destroy(this, parserErr)
+      }
       return
     }
 
@@ -6254,8 +6300,7 @@ async function connectH1 (client, socket) {
 
     if (parser) {
       if (!this[kError] && parser.statusCode && !parser.shouldKeepAlive) {
-        // We treat all incoming data so far as a valid response.
-        parser.onMessageComplete()
+        this[kError] = parser.finish() || this[kError]
       }
 
       this[kParser].destroy()
@@ -32822,7 +32867,7 @@ class RequestError extends Error {
 
 
 // pkg/dist-src/version.js
-var dist_bundle_VERSION = "10.0.9";
+var dist_bundle_VERSION = "10.0.10";
 
 // pkg/dist-src/defaults.js
 var defaults_default = {
@@ -36256,305 +36301,144 @@ function getOctokit(token, options, ...additionalPlugins) {
     return new GitHubWithPlugins(getOctokitOptions(token, options));
 }
 //# sourceMappingURL=github.js.map
-;// CONCATENATED MODULE: ../shared/semver.js
+;// CONCATENATED MODULE: ./index.js
 /**
- * shared/semver.js — Pure semver + conventional commit helpers.
- * No runtime dependencies. Importable by actions and tests alike.
- */
-
-const Bump = Object.freeze({ NONE: 0, PATCH: 1, MINOR: 2, MAJOR: 3 });
-
-function bumpFromCommit(message) {
-  const lines = message.split("\n");
-  const subject = lines[0].trim();
-  if (/^[a-z]+(\([^)]+\))?!:/.test(subject)) return Bump.MAJOR;
-  if (lines.some((l) => /^BREAKING[- ]CHANGE/i.test(l.trim()))) return Bump.MAJOR;
-  const m = subject.match(/^([a-z]+)(\([^)]+\))?:/);
-  if (!m) return Bump.PATCH;
-  return m[1] === "feat" ? Bump.MINOR : Bump.PATCH;
-}
-
-function bumpName(bump) {
-  return Object.keys(Bump).find((k) => Bump[k] === bump).toLowerCase();
-}
-
-function parseVersion(s) {
-  const [major, minor, patch] = s.replace(/^v/, "").split(".").map(Number);
-  return { major, minor, patch };
-}
-
-function applyBump(v, bump) {
-  if (bump === Bump.MAJOR) return { major: v.major + 1, minor: 0, patch: 0 };
-  if (bump === Bump.MINOR) return { major: v.major, minor: v.minor + 1, patch: 0 };
-  return { major: v.major, minor: v.minor, patch: v.patch + 1 };
-}
-
-function versionString(v) {
-  return `${v.major}.${v.minor}.${v.patch}`;
-}
-
-/** Sanitize a branch name for use as a semver prerelease identifier. */
-function sanitizeBranchName(name) {
-  return name
-    .replace(/[^a-zA-Z0-9-]/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "");
-}
-
-;// CONCATENATED MODULE: ../shared/github-api.js
-/**
- * shared/github-api.js — GitHub REST API helpers for semver tag operations.
+ * tag/index.js
  *
- * No @actions/core dependency — pass a log function where logging is needed.
- * This allows clean imports from tests in action subdirectories without
- * needing @actions/core in node_modules above the action directory.
+ * GitHub Actions JS action — creates and/or updates git tags on HEAD.
+ *
+ * Required environment:
+ *   GITHUB_TOKEN      — authenticated API access (needs contents: write)
+ *   GITHUB_REPOSITORY — "owner/repo"
+ *   GITHUB_SHA        — commit SHA to tag
+ *
+ * Inputs:
+ *   tags              — comma-separated tags to create (fail if exists unless continue-if-exists)
+ *   floating-tags     — comma-separated tags to force-update (create or move to HEAD)
+ *   continue-if-exists — skip rather than fail when tag already exists at HEAD
+ *   ignore-no-op      — allow invocation with no tags specified
+ *
+ * Outputs:
+ *   created  — comma-separated tags created
+ *   skipped  — comma-separated tags already at HEAD (continue-if-exists path)
  */
 
 
 
-async function fetchSemverTags(octokit, owner, repo) {
-  const tags = await octokit.paginate(octokit.rest.repos.listTags, {
-    owner,
-    repo,
-    per_page: 100,
-  });
 
-  const semver = tags.filter((t) => /^v?\d+\.\d+\.\d+$/.test(t.name));
-
-  semver.sort((a, b) => {
-    const av = parseVersion(a.name);
-    const bv = parseVersion(b.name);
-    return av.major - bv.major || av.minor - bv.minor || av.patch - bv.patch;
-  });
-
-  return semver.map((t) => ({ name: t.name, sha: t.commit.sha }));
+function normalizeTags(input) {
+  return input
+    .split(",")
+    .map((t) => t.trim())
+    .filter((t) => t.length > 0)
+    .filter((t, i, arr) => arr.indexOf(t) === i);
 }
 
-async function walkFirstParents(octokit, owner, repo, sha, depth) {
-  let current = sha;
-  for (let i = 0; i < depth; i++) {
-    const { data } = await octokit.rest.git.getCommit({ owner, repo, commit_sha: current });
-    if (!data.parents || data.parents.length === 0) {
-      throw new Error(`Reached root commit after ${i} hops, cannot walk ${depth} parents from ${sha}`);
-    }
-    current = data.parents[0].sha;
-  }
-  return current;
-}
-
-async function isAncestorOf(octokit, owner, repo, ancestorSha, headSha) {
-  const { data } = await octokit.rest.repos.compareCommitsWithBasehead({
-    owner,
-    repo,
-    basehead: `${ancestorSha}...${headSha}`,
-  });
-  return data.status === "ahead" || data.status === "identical";
-}
-
-async function resolveBase(octokit, owner, repo, tag, headSha, depth, log = () => {}) {
-  if (await isAncestorOf(octokit, owner, repo, tag.sha, headSha)) {
-    log(`Tag ${tag.name} commit ${tag.sha} is directly on the current branch`);
-    return tag.sha;
-  }
-
-  const baseSha = await walkFirstParents(octokit, owner, repo, tag.sha, depth);
-  log(`Tag ${tag.name}: walked ${depth} parent(s) from ${tag.sha} → ${baseSha}`);
-
-  if (await isAncestorOf(octokit, owner, repo, baseSha, headSha)) {
-    log(`Base commit ${baseSha} is on the current branch ✓`);
-    return baseSha;
-  }
-
-  throw new Error(
-    `Tag ${tag.name}: neither the tag commit (${tag.sha}) nor its depth-${depth} ` +
-    `first-parent (${baseSha}) is an ancestor of HEAD (${headSha}). ` +
-    `Check your tagging topology or adjust tag-parent-depth.`,
-  );
-}
-
-async function commitMessagesSince(octokit, owner, repo, baseSha, headSha, log = () => {}) {
-  const comparison = await octokit.rest.repos.compareCommitsWithBasehead({
-    owner,
-    repo,
-    basehead: `${baseSha}...${headSha}`,
-    per_page: 250,
-  });
-
-  const { status, total_commits, commits, commits_url } = comparison.data;
-
-  if (status === "behind" || status === "identical") {
-    return { messages: [], count: 0 };
-  }
-
-  if (commits.length === total_commits) {
-    return { messages: commits.map((c) => c.commit.message), count: total_commits };
-  }
-
-  log(`Range has ${total_commits} commits (>250) — paginating`);
-  const baseUrl = commits_url.split("?")[0];
-  const messages = [];
-  for await (const resp of octokit.paginate.iterator(
-    "GET " + baseUrl.replace("https://api.github.com", ""),
-    { per_page: 100 },
-  )) {
-    for (const c of resp.data) messages.push(c.commit.message);
-  }
-  return { messages, count: total_commits };
-}
-
-async function countAllCommits(octokit, owner, repo, headSha) {
-  let count = 0;
-  for await (const resp of octokit.paginate.iterator(
-    octokit.rest.repos.listCommits,
-    { owner, repo, sha: headSha, per_page: 100 },
-  )) {
-    count += resp.data.length;
-  }
-  return count;
-}
-
-async function tagExists(octokit, owner, repo, tag) {
+async function createTag(octokit, owner, repo, tag, headSha, continueIfExists) {
   try {
-    await octokit.rest.git.getRef({ owner, repo, ref: `tags/${tag}` });
-    return true;
+    await octokit.rest.git.createRef({
+      owner,
+      repo,
+      ref: `refs/tags/${tag}`,
+      sha: headSha,
+    });
+    info(`Created tag ${tag}`);
+    return "created";
   } catch (err) {
-    if (err.status === 404) return false;
+    if (err.status === 422) {
+      // Tag already exists
+      if (continueIfExists) {
+        const { data } = await octokit.rest.git.getRef({ owner, repo, ref: `tags/${tag}` });
+        const existingSha = data.object.sha;
+        if (existingSha === headSha) {
+          info(`Tag ${tag} already exists at HEAD — skipping`);
+          return "skipped";
+        }
+        throw new Error(
+          `Tag ${tag} already exists but points to ${existingSha}, not HEAD ${headSha}`,
+        );
+      }
+      throw new Error(`Tag ${tag} already exists`);
+    }
     throw err;
   }
 }
 
-;// CONCATENATED MODULE: ./lib.js
-
-
-function computeBump(messages) {
-  let bump = Bump.NONE;
-  for (const m of messages) bump = Math.max(bump, bumpFromCommit(m));
-  if (bump === Bump.NONE) bump = Bump.PATCH;
-  return bump;
+async function upsertFloatingTag(octokit, owner, repo, tag, headSha) {
+  try {
+    await octokit.rest.git.updateRef({
+      owner,
+      repo,
+      ref: `tags/${tag}`,
+      sha: headSha,
+      force: true,
+    });
+    info(`Updated floating tag ${tag}`);
+  } catch (err) {
+    if (err.status === 422) {
+      // Ref does not exist yet — create it
+      await octokit.rest.git.createRef({
+        owner,
+        repo,
+        ref: `refs/tags/${tag}`,
+        sha: headSha,
+      });
+      info(`Created floating tag ${tag}`);
+    } else {
+      throw err;
+    }
+  }
 }
-
-;// CONCATENATED MODULE: ./index.js
-/**
- * auto-semver/index.js
- *
- * GitHub Actions JS action — computes the next semver version based on
- * conventional commits since the last tag, using the GitHub REST API.
- *
- * No checkout step required.
- *
- * Required environment (all provided automatically by GitHub Actions):
- *   GITHUB_TOKEN      — for authenticated API requests
- *   GITHUB_REPOSITORY — "owner/repo"
- *   GITHUB_SHA        — SHA of the commit being evaluated
- *
- * Inputs:
- *   tag-parent-depth  — how many parents to walk back from the tag's commit
- *                       to find the ancestor that lives on the main branch.
- *                       Default: 1 (fishbone topology). Use 0 for direct-main.
- *
- * Outputs: version, tag, bump (all empty when nothing to release)
- */
-
-
-
-
-
-
 
 async function run() {
   try {
     const token = process.env.GITHUB_TOKEN;
     if (!token) throw new Error("GITHUB_TOKEN environment variable is not set");
-
     const repository = process.env.GITHUB_REPOSITORY;
     if (!repository) throw new Error("GITHUB_REPOSITORY environment variable is not set");
-
     const headSha = process.env.GITHUB_SHA;
     if (!headSha) throw new Error("GITHUB_SHA environment variable is not set");
 
-    const depth = parseInt(getInput("tag-parent-depth") || "1", 10);
-    if (isNaN(depth) || depth < 0) throw new Error("tag-parent-depth must be a non-negative integer");
+    const tags = normalizeTags(getInput("tags"));
+    const floatingTags = normalizeTags(getInput("floating-tags"));
+    const continueIfExists = getInput("continue-if-exists").toLowerCase() === "true";
+    const ignoreNoOp = getInput("ignore-no-op").toLowerCase() === "true";
+
+    if (tags.length === 0 && floatingTags.length === 0) {
+      if (ignoreNoOp) {
+        info("No tags specified and ignore-no-op is true — nothing to do");
+        setOutput("created", "");
+        setOutput("skipped", "");
+        return;
+      }
+      throw new Error("No tags specified. Provide 'tags' or 'floating-tags', or set ignore-no-op: true");
+    }
 
     const [owner, repo] = repository.split("/");
     const octokit = getOctokit(token);
-    const log = (msg) => info(msg);
 
-    info(`HEAD SHA         : ${headSha}`);
-    info(`tag-parent-depth : ${depth}`);
+    const created = [];
+    const skipped = [];
 
-    const semverTags = await fetchSemverTags(octokit, owner, repo);
-
-    // If HEAD is already tagged with a semver tag, return that version unchanged.
-    // Empty `tag` output tells callers (e.g. tag-semver) that no new tag is needed.
-    const headTag = semverTags.find(t => t.sha === headSha);
-    if (headTag) {
-      info(`HEAD is already tagged as ${headTag.name} — no new tag needed`);
-      setOutput("version", versionString(parseVersion(headTag.name)));
-      setOutput("tag", "");
-      setOutput("bump", "");
-      return;
+    for (const tag of tags) {
+      const result = await createTag(octokit, owner, repo, tag, headSha, continueIfExists);
+      if (result === "created") created.push(tag);
+      else skipped.push(tag);
     }
 
-    if (semverTags.length === 0) {
-      info("No prior semver tag found — counting all commits to seed patch");
-      const count = await countAllCommits(octokit, owner, repo, headSha);
-      const baseline = { major: 0, minor: 0, patch: count };
-      info(`Seeding patch from commit count: ${count}`);
-
-      const nextVersion = applyBump(baseline, Bump.PATCH);
-      const tag = `v${versionString(nextVersion)}`;
-      info(`New tag: ${tag}`);
-
-      if (await tagExists(octokit, owner, repo, tag)) {
-        info(`Tag ${tag} already exists — nothing to do.`);
-        emitEmpty();
-        return;
-      }
-
-      setOutput("version", versionString(nextVersion));
-      setOutput("tag", tag);
-      setOutput("bump", bumpName(Bump.PATCH));
-      return;
+    for (const tag of floatingTags) {
+      await upsertFloatingTag(octokit, owner, repo, tag, headSha);
+      created.push(tag);
     }
 
-    const latestTag = semverTags[semverTags.length - 1];
-    info(`Latest tag : ${latestTag.name} @ ${latestTag.sha}`);
+    setOutput("created", created.join(","));
+    setOutput("skipped", skipped.join(","));
 
-    const baseSha = await resolveBase(octokit, owner, repo, latestTag, headSha, depth, log);
-    const baseline = parseVersion(latestTag.name);
-
-    info(`Baseline version : ${versionString(baseline)}`);
-
-    const { messages } = await commitMessagesSince(octokit, owner, repo, baseSha, headSha, log);
-    info(`Commits in range : ${messages.length}`);
-
-    const bump = computeBump(messages);
-
-    const nextVersion = applyBump(baseline, bump);
-    const tag = `v${versionString(nextVersion)}`;
-
-    info(`Bump type        : ${bumpName(bump)}`);
-    info(`New version      : ${versionString(nextVersion)}`);
-    info(`New tag          : ${tag}`);
-
-    if (await tagExists(octokit, owner, repo, tag)) {
-      info(`Tag ${tag} already exists — nothing to do.`);
-      emitEmpty();
-      return;
-    }
-
-    setOutput("version", versionString(nextVersion));
-    setOutput("tag", tag);
-    setOutput("bump", bumpName(bump));
+    info(`Tags created: ${created.join(", ") || "(none)"}`);
+    info(`Tags skipped: ${skipped.join(", ") || "(none)"}`);
   } catch (err) {
     setFailed(err.message);
   }
-}
-
-function emitEmpty() {
-  setOutput("version", "");
-  setOutput("tag", "");
-  setOutput("bump", "");
 }
 
 run();
