@@ -22,7 +22,7 @@ jobs:
       - uses: actions/checkout@v6
         with:
           repository: ori-edge/oge-github-actions
-          ref: ${{ github.workflow_sha }}
+          ref: ${{ job.workflow_sha }}
 
       - id: semver
         uses: ./auto-semver
