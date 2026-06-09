@@ -1,0 +1,106 @@
+name: Actions CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "auto-semver/**"
+      - "compute-version/**"
+      - "tag/**"
+      - "tag-helm-release/**"
+      - "shared/**"
+  pull_request:
+    branches: [main]
+    paths:
+      - "auto-semver/**"
+      - "compute-version/**"
+      - "tag/**"
+      - "tag-helm-release/**"
+      - "shared/**"
+
+jobs:
+  shared-test:
+    name: Test (shared)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "20"
+
+      - run: node --test test/index.test.js
+        working-directory: shared
+
+  test:
+    name: Test (${{ matrix.action }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        action: [auto-semver, compute-version, tag, tag-helm-release]
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: ${{ matrix.action }}/package-lock.json
+
+      - run: npm ci
+        working-directory: ${{ matrix.action }}
+
+      - run: npm test
+        working-directory: ${{ matrix.action }}
+
+  build:
+    name: Build all dist
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [shared-test, test]
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "20"
+
+      - name: Build all actions
+        run: |
+          for action in auto-semver compute-version tag tag-helm-release; do
+            echo "==> Building $action"
+            (cd "$action" && npm ci && npm run build)
+          done
+
+      - name: Commit dist if changed
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add auto-semver/dist/ compute-version/dist/ tag/dist/ tag-helm-release/dist/
+          git diff --staged --quiet || git commit -m "chore: rebuild dist [skip ci]"
+          git push origin main
+
+  self-test:
+    name: Self Test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: build
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+
+      - name: Test auto-semver
+        id: semver
+        uses: ./auto-semver
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Test compute-version
+        uses: ./compute-version
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

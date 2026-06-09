@@ -3,10 +3,6 @@ name: Wait for deploy
 on:
   workflow_call:
     inputs:
-      chartPath:
-        description: "helm Chart.yaml path (kept for backward compat, no longer used for version)"
-        required: false
-        type: string
       version:
         description: "Expected deployed version. If not set, computed via compute-version action."
         required: false

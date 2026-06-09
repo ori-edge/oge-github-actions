@@ -1,18 +1,45 @@
 name: "tag"
 description: >
-  Creates a git tag on the current HEAD commit via the GitHub API.
-  No checkout required. Fails if the tag already exists.
+  Creates git tags on the current HEAD commit via the GitHub API.
+  Supports floating tags (force-updated even if they exist), continue-if-exists
+  for idempotent re-runs, and multiple tags per invocation.
+  No checkout required.
 
 author: "ori-edge"
 
 inputs:
-  tag:
-    description: "Tag ref to create, e.g. 'v1.2.3'."
-    required: true
+  tags:
+    description: >
+      Comma-separated tags to create on HEAD. Fails if any already exists,
+      unless continue-if-exists is 'true' and the tag already points to HEAD.
+    required: false
+    default: ""
+  floating-tags:
+    description: >
+      Comma-separated floating tags to force-update to HEAD even if they exist
+      (e.g. 'v1.2' and 'v1' as floating aliases for 'v1.2.3').
+    required: false
+    default: ""
+  continue-if-exists:
+    description: >
+      If 'true', skip (rather than fail) when a tag already exists at HEAD.
+      Fails if the tag exists but points to a different commit.
+    required: false
+    default: "false"
+  ignore-no-op:
+    description: >
+      If 'true', allow invocation with no tags and no floating-tags specified.
+      Otherwise the action fails when both inputs are empty.
+    required: false
+    default: "false"
 
 outputs:
+  created:
+    description: "Comma-separated list of tags created on HEAD."
+  skipped:
+    description: "Comma-separated list of tags that already existed at HEAD (continue-if-exists only)."
   version:
-    description: "Semver string without leading v, derived from the tag input."
+    description: "Semver string without leading v, derived from the first tag. Backward compat."
 
 runs:
   using: "node24"

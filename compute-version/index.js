@@ -4,175 +4,35 @@
  *
  * GitHub Actions JS action — normalises or discovers the build version.
  *
- * If the 'version' input is provided it is emitted immediately (pass-through).
- * Otherwise the GitHub REST API is used to determine the version:
- *   - HEAD has an exact semver tag → output that version (release)
- *   - HEAD not tagged             → compute {next-semver}-alpha-{N} where
- *                                   next-semver is the conventional-commits
- *                                   bump from the last tag and N is the number
- *                                   of commits since that tag.
+ * Pass-through mode: if 'version' input is non-empty, outputs it.
+ * Discovery mode (no 'version' input):
+ *   - HEAD exactly tagged with a semver tag → release version (no qualifier)
+ *   - HEAD not tagged:
+ *     - On the repo's default branch → {next-semver}-alpha-{N}
+ *     - On any other branch          → {next-semver}-{branch-name}-{N}
+ *   An unqualified version is NEVER produced for untagged commits.
  *
  * No checkout step required.
  *
- * Required environment:
+ * Required environment (provided by GitHub Actions):
  *   GITHUB_TOKEN      — authenticated API access
  *   GITHUB_REPOSITORY — "owner/repo"
  *   GITHUB_SHA        — commit SHA to evaluate
+ *   GITHUB_REF_NAME   — current branch or tag name
  *
  * Optional environment:
- *   ORI_REQUIRE_RELEASE_VERSION — set 'true' to fail on non-release versions
- *                                 (overridden by the require-release input)
+ *   GITHUB_HEAD_REF           — for pull_request events: the head branch name
+ *   ORI_REQUIRE_RELEASE_VERSION — set 'true' to fail on pre-release versions
  */
 
 import * as core from "@actions/core";
 import { getOctokit } from "@actions/github";
-
-// ── Bump precedence ──────────────────────────────────────────────────────────
-
-const Bump = Object.freeze({
-  NONE: 0,
-  PATCH: 1,
-  MINOR: 2,
-  MAJOR: 3,
-});
-
-function bumpFromCommit(message) {
-  const lines = message.split("\n");
-  const subject = lines[0].trim();
-
-  if (/^[a-z]+(\([^)]+\))?!:/.test(subject)) return Bump.MAJOR;
-  if (lines.some((l) => /^BREAKING[- ]CHANGE/i.test(l.trim()))) return Bump.MAJOR;
-
-  const m = subject.match(/^([a-z]+)(\([^)]+\))?:/);
-  if (!m) return Bump.PATCH;
-
-  return m[1] === "feat" ? Bump.MINOR : Bump.PATCH;
-}
-
-// ── Semver ───────────────────────────────────────────────────────────────────
-
-function parseVersion(s) {
-  const [major, minor, patch] = s.replace(/^v/, "").split(".").map(Number);
-  return { major, minor, patch };
-}
-
-function applyBump(v, bump) {
-  if (bump === Bump.MAJOR) return { major: v.major + 1, minor: 0, patch: 0 };
-  if (bump === Bump.MINOR) return { major: v.major, minor: v.minor + 1, patch: 0 };
-  return { major: v.major, minor: v.minor, patch: v.patch + 1 };
-}
-
-function versionString(v) {
-  return `${v.major}.${v.minor}.${v.patch}`;
-}
-
-// ── GitHub API helpers ───────────────────────────────────────────────────────
-
-async function fetchSemverTags(octokit, owner, repo) {
-  const tags = await octokit.paginate(octokit.rest.repos.listTags, {
-    owner,
-    repo,
-    per_page: 100,
-  });
-
-  const semver = tags.filter((t) => /^v?\d+\.\d+\.\d+$/.test(t.name));
-
-  semver.sort((a, b) => {
-    const av = parseVersion(a.name);
-    const bv = parseVersion(b.name);
-    return av.major - bv.major || av.minor - bv.minor || av.patch - bv.patch;
-  });
-
-  return semver.map((t) => ({ name: t.name, sha: t.commit.sha }));
-}
-
-async function walkFirstParents(octokit, owner, repo, sha, depth) {
-  let current = sha;
-  for (let i = 0; i < depth; i++) {
-    const { data } = await octokit.rest.git.getCommit({ owner, repo, commit_sha: current });
-    if (!data.parents || data.parents.length === 0) {
-      throw new Error(`Reached root commit after ${i} hops, cannot walk ${depth} parents from ${sha}`);
-    }
-    current = data.parents[0].sha;
-  }
-  return current;
-}
-
-async function isAncestorOf(octokit, owner, repo, ancestorSha, headSha) {
-  const { data } = await octokit.rest.repos.compareCommitsWithBasehead({
-    owner,
-    repo,
-    basehead: `${ancestorSha}...${headSha}`,
-  });
-  return data.status === "ahead" || data.status === "identical";
-}
-
-async function resolveBase(octokit, owner, repo, tag, headSha, depth) {
-  if (await isAncestorOf(octokit, owner, repo, tag.sha, headSha)) {
-    core.info(`Tag ${tag.name} commit ${tag.sha} is directly on the current branch`);
-    return tag.sha;
-  }
-
-  const baseSha = await walkFirstParents(octokit, owner, repo, tag.sha, depth);
-  core.info(`Tag ${tag.name}: walked ${depth} parent(s) from ${tag.sha} → ${baseSha}`);
-
-  if (await isAncestorOf(octokit, owner, repo, baseSha, headSha)) {
-    core.info(`Base commit ${baseSha} is on the current branch ✓`);
-    return baseSha;
-  }
-
-  throw new Error(
-    `Tag ${tag.name}: neither the tag commit (${tag.sha}) nor its depth-${depth} ` +
-    `first-parent (${baseSha}) is an ancestor of HEAD (${headSha}). ` +
-    `Check your tagging topology or adjust tag-parent-depth.`,
-  );
-}
-
-/**
- * Returns commit messages and total commit count in the range baseSha...headSha.
- */
-async function commitsSince(octokit, owner, repo, baseSha, headSha) {
-  const cmp = await octokit.rest.repos.compareCommitsWithBasehead({
-    owner,
-    repo,
-    basehead: `${baseSha}...${headSha}`,
-    per_page: 250,
-  });
-
-  const { status, total_commits, commits, commits_url } = cmp.data;
-
-  if (status === "behind" || status === "identical") {
-    return { messages: [], count: 0 };
-  }
-
-  if (commits.length === total_commits) {
-    return { messages: commits.map((c) => c.commit.message), count: total_commits };
-  }
-
-  core.info(`Range has ${total_commits} commits (>250) — paginating`);
-  const baseUrl = commits_url.split("?")[0];
-  const messages = [];
-  for await (const resp of octokit.paginate.iterator(
-    "GET " + baseUrl.replace("https://api.github.com", ""),
-    { per_page: 100 },
-  )) {
-    for (const c of resp.data) messages.push(c.commit.message);
-  }
-  return { messages, count: total_commits };
-}
-
-async function countAllCommits(octokit, owner, repo, headSha) {
-  let count = 0;
-  for await (const resp of octokit.paginate.iterator(
-    octokit.rest.repos.listCommits,
-    { owner, repo, sha: headSha, per_page: 100 },
-  )) {
-    count += resp.data.length;
-  }
-  return count;
-}
-
-// ── Main ─────────────────────────────────────────────────────────────────────
+import {
+  Bump, bumpFromCommit, parseVersion, applyBump, versionString, sanitizeBranchName,
+} from "../shared/semver.js";
+import {
+  fetchSemverTags, resolveBase, commitMessagesSince, countAllCommits,
+} from "../shared/github-api.js";
 
 async function run() {
   try {
@@ -193,9 +53,7 @@ async function run() {
     if (explicitVersion) {
       const isRelease = !explicitVersion.includes("-");
       if (requireRelease && !isRelease) {
-        core.setFailed(
-          `require-release is true but version '${explicitVersion}' is a pre-release`,
-        );
+        core.setFailed(`require-release is true but version '${explicitVersion}' is a pre-release`);
         return;
       }
       core.info(`Using explicit version: ${explicitVersion}`);
@@ -205,21 +63,23 @@ async function run() {
       return;
     }
 
-    // Discover from GitHub API
     const depth = parseInt(core.getInput("tag-parent-depth") || "0", 10);
-    if (isNaN(depth) || depth < 0) {
-      throw new Error("tag-parent-depth must be a non-negative integer");
-    }
+    if (isNaN(depth) || depth < 0) throw new Error("tag-parent-depth must be a non-negative integer");
 
     const [owner, repo] = repository.split("/");
     const octokit = getOctokit(token);
+    const log = (msg) => core.info(msg);
+
+    // Effective branch: GITHUB_HEAD_REF for PRs, GITHUB_REF_NAME for branches/tags
+    const currentBranch = process.env.GITHUB_HEAD_REF || process.env.GITHUB_REF_NAME || "";
 
     core.info(`HEAD SHA         : ${headSha}`);
     core.info(`tag-parent-depth : ${depth}`);
+    core.info(`Current branch   : ${currentBranch}`);
 
     const semverTags = await fetchSemverTags(octokit, owner, repo);
 
-    // Check if HEAD is exactly tagged
+    // Exact tag match → release version (always, regardless of branch)
     const exactTag = semverTags.find((t) => t.sha === headSha);
     if (exactTag) {
       const version = exactTag.name.replace(/^v/, "");
@@ -230,16 +90,25 @@ async function run() {
       return;
     }
 
-    core.info("HEAD is not tagged — computing alpha version");
+    core.info("HEAD is not tagged — computing qualified version");
 
-    // No prior tags: seed from total commit count
+    // Determine qualifier: alpha on default branch, branch name elsewhere
+    const { data: repoData } = await octokit.rest.repos.get({ owner, repo });
+    const defaultBranch = repoData.default_branch;
+    const isDefaultBranch = currentBranch === defaultBranch;
+    const qualifier = isDefaultBranch
+      ? "alpha"
+      : sanitizeBranchName(currentBranch) || "dev";
+
+    core.info(`Default branch   : ${defaultBranch}`);
+    core.info(`Qualifier        : ${qualifier}`);
+
+    // No prior tags
     if (semverTags.length === 0) {
       const N = await countAllCommits(octokit, owner, repo, headSha);
-      const version = `0.0.1-alpha-${N}`;
+      const version = `0.0.1-${qualifier}-${N}`;
       if (requireRelease) {
-        core.setFailed(
-          `require-release is true but HEAD is not tagged (computed '${version}')`,
-        );
+        core.setFailed(`require-release is true but HEAD is not tagged (computed '${version}')`);
         return;
       }
       core.setOutput("version", version);
@@ -252,10 +121,10 @@ async function run() {
     const latestTag = semverTags[semverTags.length - 1];
     core.info(`Latest tag : ${latestTag.name} @ ${latestTag.sha}`);
 
-    const baseSha = await resolveBase(octokit, owner, repo, latestTag, headSha, depth);
+    const baseSha = await resolveBase(octokit, owner, repo, latestTag, headSha, depth, log);
     const baseline = parseVersion(latestTag.name);
 
-    const { messages, count: N } = await commitsSince(octokit, owner, repo, baseSha, headSha);
+    const { messages, count: N } = await commitMessagesSince(octokit, owner, repo, baseSha, headSha, log);
     core.info(`Commits in range : ${messages.length} (total: ${N})`);
 
     let bump = Bump.NONE;
@@ -265,12 +134,10 @@ async function run() {
     if (bump === Bump.NONE) bump = Bump.PATCH;
 
     const nextVersion = applyBump(baseline, bump);
-    const version = `${versionString(nextVersion)}-alpha-${N}`;
+    const version = `${versionString(nextVersion)}-${qualifier}-${N}`;
 
     if (requireRelease) {
-      core.setFailed(
-        `require-release is true but HEAD is not tagged (computed '${version}')`,
-      );
+      core.setFailed(`require-release is true but HEAD is not tagged (computed '${version}')`);
       return;
     }
 

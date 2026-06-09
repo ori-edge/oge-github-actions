@@ -4,10 +4,11 @@ Oge GitHub actions and reusable workflows.
 Projects use git semver tags as the release version for docker images, application version, and helm charts.
 Everything is consistent (docker tag matches git tag matches helm chart version — easier to debug and rollback).
 
-`oge-*` and `ogc-*` repos use **direct-main tagging** (tag placed directly on the HEAD commit; see below).
-`ope-*` repos use **fishbone tagging** (tag on a side commit; see below).
+Some repos use **direct-main tagging** (tag placed directly on the HEAD commit; see below).
+Others use **fishbone tagging** (tag on a side commit; see below).
+Some legacy repos keep version in source (e.g. `Chart.yaml`); newer repos use `0.0.0-dev` as a placeholder and resolve the real version at CI time from git tags.
 
-Workflows can reference `@main` for latest or pin to a specific tag e.g. `@v0.22.0`.
+Pin workflows to a specific release tag, e.g. `@v0.23.0`. Pinning to `@main` is supported but not recommended for production workflows.
 
 ## docker
 GitHub workflow to build and push docker image. Version is resolved via the `compute-version` action: if `imageVersion`
@@ -38,7 +39,7 @@ is provided it is used directly; otherwise the version is discovered from git ta
 ```yaml
 jobs:
   docker:
-    uses: ori-edge/oge-github-actions/.github/workflows/docker.yml@main
+    uses: ori-edge/oge-github-actions/.github/workflows/docker.yml@v0.23.0  # pin to the latest release
     with:
       imageName: example-app
       platforms: linux/amd64
@@ -87,7 +88,7 @@ discovered from git tags.
 ```yaml
 jobs:
   gcp-helm-charts:
-    uses: ori-edge/oge-github-actions/.github/workflows/gcp-helm-charts.yml@main
+    uses: ori-edge/oge-github-actions/.github/workflows/gcp-helm-charts.yml@v0.23.0  # pin to the latest release
     with:
       gcpDestination: "helm-charts"
       chartVersion: ${{ needs.release.outputs.version }}
@@ -114,7 +115,7 @@ use `.service.version`.
 ```yaml
 jobs:
   wait-for-deploy:
-    uses: ori-edge/oge-github-actions/.github/workflows/wait-for-deploy.yml@main
+    uses: ori-edge/oge-github-actions/.github/workflows/wait-for-deploy.yml@v0.23.0  # pin to the latest release
     with:
       version: ${{ needs.release.outputs.version }}
       url: "https://example.com/version"
@@ -244,10 +245,10 @@ jobs:
       valueFiles: "values.yaml,values-prod.yaml"
 ```
 
-## Direct-main tagging release workflow (oge-*/ogc-* repos)
+## Direct-main tagging release workflow
 
-`oge-*` and `ogc-*` repos use direct-main tagging: the semver tag is placed directly on the HEAD commit of `main`
-with no fishbone commit. The codebase always keeps `version: 0.0.0-dev` in `Chart.yaml` (accidental-deploy guard);
+With direct-main tagging the semver tag is placed directly on the HEAD commit of `main`
+with no fishbone commit. The codebase keeps `version: 0.0.0-dev` in `Chart.yaml` (accidental-deploy guard);
 the actual version is computed at CI time from git tags.
 
 Two new actions support this pattern:
@@ -284,21 +285,21 @@ release:
     version: ${{ steps.semver.outputs.version }}
   steps:
     - id: semver
-      uses: ori-edge/oge-github-actions/auto-semver@main
+      uses: ori-edge/oge-github-actions/auto-semver@v0.23.0  # pin to the latest release
       with:
         tag-parent-depth: '0'
       env:
         GITHUB_TOKEN: ${{ secrets.GH_TOKEN || github.token }}
 
     - if: steps.semver.outputs.tag != ''
-      uses: ori-edge/oge-github-actions/tag@main
+      uses: ori-edge/oge-github-actions/tag@v0.23.0  # pin to the latest release
       with:
-        tag: ${{ steps.semver.outputs.tag }}
+        tags: ${{ steps.semver.outputs.tag }}
       env:
         GITHUB_TOKEN: ${{ secrets.GH_TOKEN || github.token }}
 ```
 
-### Full release workflow example (ogc-* / oge-* repos)
+### Full release workflow example
 
 ```yaml
 name: release
@@ -318,22 +319,22 @@ jobs:
       version: ${{ steps.semver.outputs.version }}
     steps:
       - id: semver
-        uses: ori-edge/oge-github-actions/auto-semver@main
+        uses: ori-edge/oge-github-actions/auto-semver@v0.23.0  # pin to the latest release
         with:
           tag-parent-depth: '0'
         env:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN || github.token }}
       - if: steps.semver.outputs.tag != ''
-        uses: ori-edge/oge-github-actions/tag@main
+        uses: ori-edge/oge-github-actions/tag@v0.23.0  # pin to the latest release
         with:
-          tag: ${{ steps.semver.outputs.tag }}
+          tags: ${{ steps.semver.outputs.tag }}
         env:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN || github.token }}
 
   docker:
     needs: release
     if: needs.release.outputs.version != ''
-    uses: ori-edge/oge-github-actions/.github/workflows/docker.yml@main
+    uses: ori-edge/oge-github-actions/.github/workflows/docker.yml@v0.23.0  # pin to the latest release
     with:
       imageName: my-service
       imageVersion: ${{ needs.release.outputs.version }}
@@ -346,7 +347,7 @@ jobs:
   helm-chart-museum:
     needs: [release, docker]
     if: needs.release.outputs.version != ''
-    uses: ori-edge/oge-github-actions/.github/workflows/gcp-helm-charts.yml@main
+    uses: ori-edge/oge-github-actions/.github/workflows/gcp-helm-charts.yml@v0.23.0  # pin to the latest release
     with:
       gcpDestination: "helm-ori"
       chartVersion: ${{ needs.release.outputs.version }}
@@ -356,7 +357,7 @@ jobs:
 
 ## Fishbone tagging release workflow
 
-Some repositories have opted into a fishbone tagging release strategy with automatic [semantic versioning](https://semver.org/) derived from [conventional commits](https://www.conventionalcommits.org/en/v1.0.0/).
+Repositories where version must be encoded in source (e.g. in a Helm `Chart.yaml`) can use a fishbone tagging release strategy with automatic [semantic versioning](https://semver.org/) derived from [conventional commits](https://www.conventionalcommits.org/en/v1.0.0/).
 
 Fishbone tagging is where the tag that is pushed is a commit that is never merged back to the main branch.
 In Git, tags are pointers to commits and the commits do not have ever been on any branch in order to be tagged.

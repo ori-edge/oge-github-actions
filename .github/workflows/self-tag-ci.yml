@@ -12,8 +12,7 @@ jobs:
       contents: write
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -25,13 +24,8 @@ jobs:
 
       - name: Create release tag
         if: steps.semver.outputs.tag != ''
-        uses: actions/github-script@v9
+        uses: ./tag
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            github.rest.git.createRef({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              ref: "refs/tags/${{ steps.semver.outputs.tag }}",
-              sha: context.sha
-            })
+          tags: ${{ steps.semver.outputs.tag }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
