@@ -47,6 +47,14 @@ runs:
       with:
         fetch-depth: 0
 
+    # HACK: symlink this repo's root into _actions/current so sibling actions are
+    # reachable as ./../../_actions/current/<name> local paths.
+    # TODO: once https://github.com/orgs/community/discussions/26245#discussioncomment-15601440
+    # ships the $/ syntax, remove this step and replace the local-path uses: below with $/compute-version.
+    - name: Link sibling actions
+      shell: bash
+      run: ln -sf "$GITHUB_ACTION_PATH/.." /home/runner/work/_actions/current
+
     - name: Set up QEMU
       uses: docker/setup-qemu-action@v4
 
@@ -63,7 +71,7 @@ runs:
 
     - name: Resolve image version
       id: cv
-      uses: ../compute-version
+      uses: ./../../_actions/current/compute-version
       with:
         version: ${{ inputs.imageVersion }}
 

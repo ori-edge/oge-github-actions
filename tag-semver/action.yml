@@ -2,8 +2,8 @@ name: "Semver tag"
 description: >
   Computes the next semver from conventional commits since the last tag and tags HEAD
   (both vX.Y.Z and X.Y.Z). No-op if HEAD is already tagged. No checkout required.
-  Caller's job must have permissions.contents: write. Pass a bot token by setting
-  GITHUB_TOKEN in the step or job environment; falls back to the default token.
+  Caller's job must have permissions.contents: write. Set GITHUB_TOKEN in the step
+  or job env; falls back to the default token.
 outputs:
   version:
     description: "Tagged version (e.g. '1.2.3'), empty string if nothing to release"
@@ -11,12 +11,20 @@ outputs:
 runs:
   using: composite
   steps:
+    # HACK: symlink this repo's root into _actions/current so sibling actions are
+    # reachable as ./../../_actions/current/<name> local paths.
+    # TODO: once https://github.com/orgs/community/discussions/26245#discussioncomment-15601440
+    # ships the $/ syntax, remove this step and replace the local-path uses: below with $/auto-semver etc.
+    - name: Link sibling actions
+      shell: bash
+      run: ln -sf "$GITHUB_ACTION_PATH/.." /home/runner/work/_actions/current
+
     - id: semver
-      uses: ../auto-semver
+      uses: ./../../_actions/current/auto-semver
       with:
         tag-parent-depth: '0'
 
     - if: steps.semver.outputs.tag != ''
-      uses: ../tag
+      uses: ./../../_actions/current/tag
       with:
         tags: ${{ steps.semver.outputs.tag }},${{ steps.semver.outputs.version }}
