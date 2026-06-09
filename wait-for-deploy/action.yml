@@ -1,0 +1,45 @@
+name: "Wait for deploy"
+description: >
+  Polls a URL until the deployed version matches the expected version.
+  If version is not provided, it is computed from git tags.
+inputs:
+  version:
+    description: "Expected deployed version. If not set, computed from git tags."
+    required: false
+    default: ""
+  url:
+    description: "URL to poll for the currently deployed version"
+    required: true
+  jq:
+    description: "jq expression to extract the version from the response"
+    required: false
+    default: ".version"
+runs:
+  using: composite
+  steps:
+    - name: Resolve expected version
+      id: cv
+      uses: ../compute-version
+      with:
+        version: ${{ inputs.version }}
+
+    - name: Wait for deploy
+      shell: bash
+      run: |
+        TAG=${{ steps.cv.outputs.version }}
+        for i in $(seq 1 10)
+        do
+          VERSION=$(curl -s ${{ inputs.url }} | jq '${{ inputs.jq }}' | tr -d '"')
+          sleep 60
+          if [[ $VERSION == $TAG ]]
+          then
+             echo "$VERSION is released"
+             break
+          elif [[ i -eq 10 ]]
+          then
+             echo "$TAG has not been deployed"
+             exit 1
+          else
+              echo "$VERSION is currently deployed, waiting for $TAG"
+          fi
+        done
