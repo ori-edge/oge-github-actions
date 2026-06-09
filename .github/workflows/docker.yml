@@ -84,15 +84,45 @@ jobs:
           username: ${{ secrets.REGISTRY_USERNAME }}
           password: ${{ secrets.REGISTRY_PASSWORD }}
 
-      - name: Get workflow ref
-        id: wf-ref
-        run: echo "ref=${GITHUB_WORKFLOW_REF##*@}" >> $GITHUB_OUTPUT
+      - name: Debug runner filesystem
+        id: debug-oge
+        run: |
+          echo "=== env vars ==="
+          echo "GITHUB_WORKFLOW_REF=${GITHUB_WORKFLOW_REF}"
+          echo "GITHUB_WORKFLOW_SHA=${GITHUB_WORKFLOW_SHA}"
+          echo "GITHUB_WORKSPACE=${GITHUB_WORKSPACE}"
+          echo "RUNNER_WORKSPACE=${RUNNER_WORKSPACE}"
+          echo "RUNNER_TOOL_CACHE=${RUNNER_TOOL_CACHE}"
+          echo "RUNNER_TEMP=${RUNNER_TEMP}"
+          echo "=== /home/runner/work ==="
+          ls /home/runner/work/ 2>/dev/null || echo "(empty)"
+          echo "=== /home/runner/work/_actions (top level) ==="
+          ls /home/runner/work/_actions/ 2>/dev/null || echo "(no _actions dir)"
+          echo "=== /home/runner/work/_actions/ori-edge ==="
+          ls /home/runner/work/_actions/ori-edge/ 2>/dev/null || echo "(no ori-edge dir)"
+          echo "=== find oge-github-actions dirs ==="
+          find /home/runner -maxdepth 10 -name "oge-github-actions" -type d 2>/dev/null | head -10 || echo "(not found)"
+          echo "=== find auto-semver dirs ==="
+          find /home/runner -maxdepth 10 -name "auto-semver" -type d 2>/dev/null | head -10 || echo "(not found)"
+          # Try to locate and symlink without a new checkout
+          OGE=$(find /home/runner -maxdepth 10 -name "auto-semver" -type d 2>/dev/null | grep "oge-github-actions" | head -1 | sed 's|/auto-semver$||')
+          if [ -n "$OGE" ]; then
+            echo "found=true" >> $GITHUB_OUTPUT
+            echo "path=$OGE" >> $GITHUB_OUTPUT
+            echo "Found oge-github-actions at $OGE — will symlink"
+            ln -s "$OGE" _oge-github-actions
+          else
+            echo "found=false" >> $GITHUB_OUTPUT
+            echo "path=" >> $GITHUB_OUTPUT
+            echo "Not found via find — will checkout"
+          fi
 
       - name: Checkout oge-github-actions
+        if: steps.debug-oge.outputs.found != 'true'
         uses: actions/checkout@v6
         with:
           repository: ori-edge/oge-github-actions
-          ref: ${{ steps.wf-ref.outputs.ref }}
+          ref: ${{ env.GITHUB_WORKFLOW_SHA }}
           path: _oge-github-actions
 
       - name: Resolve image version
