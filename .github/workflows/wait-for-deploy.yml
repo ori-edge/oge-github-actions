@@ -29,7 +29,7 @@ jobs:
     steps:
       - name: Resolve expected version
         id: cv
-        uses: ori-edge/oge-github-actions/compute-version@oge-12318
+        uses: ./compute-version
         with:
           version: ${{ inputs.version }}
         env:
