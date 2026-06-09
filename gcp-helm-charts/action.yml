@@ -28,14 +28,12 @@ runs:
       uses: actions/checkout@v6
       with:
         fetch-depth: 0
-        path: src
 
     - name: Helm tool installer
       uses: Azure/setup-helm@v5
 
     - name: Package Helm Chart
       shell: bash
-      working-directory: src
       run: |
         for dir in ${{ inputs.chartsPath }}; do
           if [ -d "$dir" ]; then
@@ -51,7 +49,7 @@ runs:
     - name: Push chart to GCP Cloud Storage
       uses: google-github-actions/upload-cloud-storage@v3
       with:
-        path: src/charts
+        path: charts
         glob: "*.tgz"
         process_gcloudignore: false
         destination: ${{ inputs.gcpDestination }}

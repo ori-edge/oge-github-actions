@@ -46,7 +46,6 @@ runs:
       uses: actions/checkout@v6
       with:
         fetch-depth: 0
-        path: src
 
     - name: Set up QEMU
       uses: docker/setup-qemu-action@v4
@@ -81,8 +80,8 @@ runs:
     - name: Build and push image
       uses: docker/build-push-action@v7
       with:
-        context: src/${{ inputs.buildContext }}
-        file: ${{ inputs.dockerFile != '' && format('src/{0}', inputs.dockerFile) || '' }}
+        context: ${{ inputs.buildContext }}
+        file: ${{ inputs.dockerFile }}
         build-args: ${{ env.BUILD_ARGS }}
         platforms: ${{ inputs.platforms }}
         push: ${{ inputs.push }}
