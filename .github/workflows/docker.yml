@@ -85,7 +85,7 @@ jobs:
 
       - name: Resolve image version
         id: cv
-        uses: ori-edge/oge-github-actions/compute-version@main
+        uses: ori-edge/oge-github-actions/compute-version@oge-12318
         with:
           version: ${{ inputs.imageVersion }}
         env:
