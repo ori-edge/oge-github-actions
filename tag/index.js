@@ -18,7 +18,6 @@
  * Outputs:
  *   created  — comma-separated tags created
  *   skipped  — comma-separated tags already at HEAD (continue-if-exists path)
- *   version  — semver without leading v from the first tag (backward compat)
  */
 
 import * as core from "@actions/core";
@@ -107,7 +106,6 @@ async function run() {
         core.info("No tags specified and ignore-no-op is true — nothing to do");
         core.setOutput("created", "");
         core.setOutput("skipped", "");
-        core.setOutput("version", "");
         return;
       }
       throw new Error("No tags specified. Provide 'tags' or 'floating-tags', or set ignore-no-op: true");
@@ -130,13 +128,8 @@ async function run() {
       created.push(tag);
     }
 
-    const allTags = [...tags, ...floatingTags];
-    const firstTag = allTags[0] || "";
-    const version = firstTag.replace(/^v/, "");
-
     core.setOutput("created", created.join(","));
     core.setOutput("skipped", skipped.join(","));
-    core.setOutput("version", version);
 
     core.info(`Tags created: ${created.join(", ") || "(none)"}`);
     core.info(`Tags skipped: ${skipped.join(", ") || "(none)"}`);

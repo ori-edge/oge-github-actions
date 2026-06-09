@@ -36321,7 +36321,6 @@ function getOctokit(token, options, ...additionalPlugins) {
  * Outputs:
  *   created  — comma-separated tags created
  *   skipped  — comma-separated tags already at HEAD (continue-if-exists path)
- *   version  — semver without leading v from the first tag (backward compat)
  */
 
 
@@ -36410,7 +36409,6 @@ async function run() {
         info("No tags specified and ignore-no-op is true — nothing to do");
         setOutput("created", "");
         setOutput("skipped", "");
-        setOutput("version", "");
         return;
       }
       throw new Error("No tags specified. Provide 'tags' or 'floating-tags', or set ignore-no-op: true");
@@ -36433,13 +36431,8 @@ async function run() {
       created.push(tag);
     }
 
-    const allTags = [...tags, ...floatingTags];
-    const firstTag = allTags[0] || "";
-    const version = firstTag.replace(/^v/, "");
-
     setOutput("created", created.join(","));
     setOutput("skipped", skipped.join(","));
-    setOutput("version", version);
 
     info(`Tags created: ${created.join(", ") || "(none)"}`);
     info(`Tags skipped: ${skipped.join(", ") || "(none)"}`);

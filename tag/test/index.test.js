@@ -160,16 +160,3 @@ describe("floating tag upsert", () => {
     assert.equal(octokit._created[0].tag, "v1.2");
   });
 });
-
-// ── Tests: version output ─────────────────────────────────────────────────────
-
-describe("version output", () => {
-  it("strips leading v", () => {
-    const firstTag = "v1.2.3";
-    assert.equal(firstTag.replace(/^v/, ""), "1.2.3");
-  });
-
-  it("is no-op when no leading v", () => {
-    assert.equal("1.2.3".replace(/^v/, ""), "1.2.3");
-  });
-});

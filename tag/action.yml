@@ -38,8 +38,6 @@ outputs:
     description: "Comma-separated list of tags created on HEAD."
   skipped:
     description: "Comma-separated list of tags that already existed at HEAD (continue-if-exists only)."
-  version:
-    description: "Semver string without leading v, derived from the first tag. Backward compat."
 
 runs:
   using: "node24"
