@@ -53,6 +53,17 @@ async function run() {
 
     const semverTags = await fetchSemverTags(octokit, owner, repo);
 
+    // If HEAD is already tagged with a semver tag, return that version unchanged.
+    // Empty `tag` output tells callers (e.g. tag-semver) that no new tag is needed.
+    const headTag = semverTags.find(t => t.sha === headSha);
+    if (headTag) {
+      core.info(`HEAD is already tagged as ${headTag.name} — no new tag needed`);
+      core.setOutput("version", versionString(parseVersion(headTag.name)));
+      core.setOutput("tag", "");
+      core.setOutput("bump", "");
+      return;
+    }
+
     if (semverTags.length === 0) {
       core.info("No prior semver tag found — counting all commits to seed patch");
       const count = await countAllCommits(octokit, owner, repo, headSha);
