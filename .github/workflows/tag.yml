@@ -22,8 +22,6 @@ jobs:
       - name: Get workflow ref
         id: wf-ref
         run: echo "ref=${GITHUB_WORKFLOW_REF##*@}" >> $GITHUB_OUTPUT
-        env:
-          GITHUB_WORKFLOW_REF: ${{ github.workflow_ref }}
 
       - uses: actions/checkout@v6
         with:
