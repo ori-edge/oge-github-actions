@@ -27,9 +27,16 @@ jobs:
   wait-for-deploy:
     runs-on: ${{ inputs.runsOn }}
     steps:
+      - name: Checkout oge-github-actions
+        uses: actions/checkout@v6
+        with:
+          repository: ori-edge/oge-github-actions
+          ref: ${{ github.workflow_sha }}
+          path: _oge-github-actions
+
       - name: Resolve expected version
         id: cv
-        uses: ./compute-version
+        uses: ./_oge-github-actions/compute-version
         with:
           version: ${{ inputs.version }}
         env:
