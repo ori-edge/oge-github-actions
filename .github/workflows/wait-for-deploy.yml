@@ -46,6 +46,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
+          path: src
 
       - name: Wait for deploy
         run: |
