@@ -16,8 +16,9 @@ be validated. Do not merge such a temporary pin to the consumer repo's default b
 cease to exist once the PR is merged.
 
 When testing a **release workflow** specifically (one that creates tags or publishes artefacts), pin to a
-**commit SHA** rather than a branch name — branch-name refs can move mid-run and the SHA makes the test
-reproducible. Switch back to a version tag once testing is complete.
+**commit SHA** rather than a branch name — if the PR branch is squash-merged and deleted, a branch-name
+pin becomes unresolvable, whereas a SHA remains reachable from GitHub and keeps the release reproducible.
+Switch back to a version tag once testing is complete.
 
 ## docker
 GitHub workflow to build and push docker image. Version is resolved via the `compute-version` action: if `imageVersion`
