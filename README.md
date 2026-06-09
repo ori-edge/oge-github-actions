@@ -8,7 +8,16 @@ Some repos use **direct-main tagging** (tag placed directly on the HEAD commit; 
 Others use **fishbone tagging** (tag on a side commit; see below).
 Some legacy repos keep version in source (e.g. `Chart.yaml`); newer repos use `0.0.0-dev` as a placeholder and resolve the real version at CI time from git tags.
 
-Pin workflows to a specific release tag, e.g. `@v0.23.0`. Pinning to `@main` is supported but not recommended for production workflows.
+**Pinning:** always pin to a specific release tag in production, e.g. `@v0.23.0`.
+
+When testing new versions of a workflow or action before they are released, it is acceptable to temporarily
+pin a single consumer repo to the feature branch name (e.g. `@oge-12318`) so that end-to-end behaviour can
+be validated. Do not merge such a temporary pin to the consumer repo's default branch — the branch will
+cease to exist once the PR is merged.
+
+When testing a **release workflow** specifically (one that creates tags or publishes artefacts), pin to a
+**commit SHA** rather than a branch name — branch-name refs can move mid-run and the SHA makes the test
+reproducible. Switch back to a version tag once testing is complete.
 
 ## docker
 GitHub workflow to build and push docker image. Version is resolved via the `compute-version` action: if `imageVersion`
