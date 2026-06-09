@@ -23,11 +23,12 @@
 import * as core from "@actions/core";
 import { getOctokit } from "@actions/github";
 import {
-  Bump, bumpFromCommit, bumpName, parseVersion, applyBump, versionString,
+  Bump, bumpName, parseVersion, applyBump, versionString,
 } from "../shared/semver.js";
 import {
   fetchSemverTags, resolveBase, commitMessagesSince, countAllCommits, tagExists,
 } from "../shared/github-api.js";
+import { computeBump } from "./lib.js";
 
 async function run() {
   try {
@@ -85,11 +86,7 @@ async function run() {
     const { messages } = await commitMessagesSince(octokit, owner, repo, baseSha, headSha, log);
     core.info(`Commits in range : ${messages.length}`);
 
-    let bump = Bump.NONE;
-    for (const message of messages) {
-      bump = Math.max(bump, bumpFromCommit(message));
-    }
-    if (bump === Bump.NONE) bump = Bump.PATCH;
+    const bump = computeBump(messages);
 
     const nextVersion = applyBump(baseline, bump);
     const tag = `v${versionString(nextVersion)}`;

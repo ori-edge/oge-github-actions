@@ -1,51 +1,6 @@
-/**
- * test/index.test.js
- *
- * Action-specific tests for compute-version.
- * Shared function tests (semver, sanitizeBranchName, resolveBase, etc.) live in
- * shared/test/index.test.js.
- *
- * Run with: node --test test/index.test.js  (Node 18+)
- */
-
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import {
-  Bump, bumpFromCommit, parseVersion, applyBump, versionString,
-} from "../../shared/semver.js";
-
-// ── computeQualifiedVersion helper ────────────────────────────────────────────
-// Mirrors the version computation in compute-version/index.js.
-
-function computeQualifiedVersion(latestTagName, messages, N, qualifier) {
-  const baseline = parseVersion(latestTagName);
-  let bump = Bump.NONE;
-  for (const message of messages) bump = Math.max(bump, bumpFromCommit(message));
-  if (bump === Bump.NONE) bump = Bump.PATCH;
-  const nextVersion = applyBump(baseline, bump);
-  return `${versionString(nextVersion)}-${qualifier}-${N}`;
-}
-
-// ── require-release resolution ────────────────────────────────────────────────
-// Mirrors compute-version/index.js logic for resolving the require-release flag.
-
-function resolveRequireRelease(inputValue, envValue) {
-  return (inputValue || envValue || "false").toLowerCase() === "true";
-}
-
-// ── pass-through ──────────────────────────────────────────────────────────────
-// Mirrors compute-version/index.js pass-through path.
-
-function passthroughVersion(explicit, requireRelease) {
-  if (!explicit) return null;
-  const isRelease = !explicit.includes("-");
-  if (requireRelease && !isRelease) {
-    throw new Error(`require-release is true but version '${explicit}' is a pre-release`);
-  }
-  return { version: explicit, tag: `v${explicit}`, isRelease };
-}
-
-// ── Tests ─────────────────────────────────────────────────────────────────────
+import { resolveRequireRelease, passthroughVersion, computeQualifiedVersion } from "../lib.js";
 
 describe("resolveRequireRelease", () => {
   it("defaults to false when both empty", () => assert.equal(resolveRequireRelease("", ""), false));

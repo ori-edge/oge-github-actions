@@ -36423,6 +36423,16 @@ async function tagExists(octokit, owner, repo, tag) {
   }
 }
 
+;// CONCATENATED MODULE: ./lib.js
+
+
+function computeBump(messages) {
+  let bump = Bump.NONE;
+  for (const m of messages) bump = Math.max(bump, bumpFromCommit(m));
+  if (bump === Bump.NONE) bump = Bump.PATCH;
+  return bump;
+}
+
 ;// CONCATENATED MODULE: ./index.js
 /**
  * auto-semver/index.js
@@ -36444,6 +36454,7 @@ async function tagExists(octokit, owner, repo, tag) {
  *
  * Outputs: version, tag, bump (all empty when nothing to release)
  */
+
 
 
 
@@ -36506,11 +36517,7 @@ async function run() {
     const { messages } = await commitMessagesSince(octokit, owner, repo, baseSha, headSha, log);
     info(`Commits in range : ${messages.length}`);
 
-    let bump = Bump.NONE;
-    for (const message of messages) {
-      bump = Math.max(bump, bumpFromCommit(message));
-    }
-    if (bump === Bump.NONE) bump = Bump.PATCH;
+    const bump = computeBump(messages);
 
     const nextVersion = applyBump(baseline, bump);
     const tag = `v${versionString(nextVersion)}`;

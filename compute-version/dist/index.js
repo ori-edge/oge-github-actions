@@ -36468,6 +36468,31 @@ async function tagExists(octokit, owner, repo, tag) {
   }
 }
 
+;// CONCATENATED MODULE: ./lib.js
+
+
+function resolveRequireRelease(inputValue, envValue) {
+  return (inputValue || envValue || "false").toLowerCase() === "true";
+}
+
+function passthroughVersion(explicit, requireRelease) {
+  if (!explicit) return null;
+  const isRelease = !explicit.includes("-");
+  if (requireRelease && !isRelease) {
+    throw new Error(`require-release is true but version '${explicit}' is a pre-release`);
+  }
+  return { version: explicit, tag: `v${explicit}`, isRelease };
+}
+
+function computeQualifiedVersion(latestTagName, messages, N, qualifier) {
+  const baseline = parseVersion(latestTagName);
+  let bump = Bump.NONE;
+  for (const message of messages) bump = Math.max(bump, bumpFromCommit(message));
+  if (bump === Bump.NONE) bump = Bump.PATCH;
+  const nextVersion = applyBump(baseline, bump);
+  return `${versionString(nextVersion)}-${qualifier}-${N}`;
+}
+
 ;// CONCATENATED MODULE: ./index.js
 /**
  * compute-version/index.js
@@ -36500,6 +36525,7 @@ async function tagExists(octokit, owner, repo, tag) {
 
 
 
+
 async function run() {
   try {
     const token = process.env.GITHUB_TOKEN;
@@ -36509,23 +36535,18 @@ async function run() {
     const headSha = process.env.GITHUB_SHA;
     if (!headSha) throw new Error("GITHUB_SHA environment variable is not set");
 
-    const requireReleaseInput = getInput("require-release");
-    const requireRelease =
-      (requireReleaseInput || process.env.ORI_REQUIRE_RELEASE_VERSION || "false")
-        .toLowerCase() === "true";
+    const requireRelease = resolveRequireRelease(
+      getInput("require-release"),
+      process.env.ORI_REQUIRE_RELEASE_VERSION,
+    );
 
     // Pass-through: explicit version supplied by caller
-    const explicitVersion = getInput("version");
-    if (explicitVersion) {
-      const isRelease = !explicitVersion.includes("-");
-      if (requireRelease && !isRelease) {
-        setFailed(`require-release is true but version '${explicitVersion}' is a pre-release`);
-        return;
-      }
-      info(`Using explicit version: ${explicitVersion}`);
-      setOutput("version", explicitVersion);
-      setOutput("tag", `v${explicitVersion}`);
-      setOutput("is-release", String(isRelease));
+    const passthrough = passthroughVersion(getInput("version"), requireRelease);
+    if (passthrough) {
+      info(`Using explicit version: ${passthrough.version}`);
+      setOutput("version", passthrough.version);
+      setOutput("tag", passthrough.tag);
+      setOutput("is-release", String(passthrough.isRelease));
       return;
     }
 
@@ -36588,19 +36609,11 @@ async function run() {
     info(`Latest tag : ${latestTag.name} @ ${latestTag.sha}`);
 
     const baseSha = await resolveBase(octokit, owner, repo, latestTag, headSha, depth, log);
-    const baseline = parseVersion(latestTag.name);
 
     const { messages, count: N } = await commitMessagesSince(octokit, owner, repo, baseSha, headSha, log);
     info(`Commits in range : ${messages.length} (total: ${N})`);
 
-    let bump = Bump.NONE;
-    for (const message of messages) {
-      bump = Math.max(bump, bumpFromCommit(message));
-    }
-    if (bump === Bump.NONE) bump = Bump.PATCH;
-
-    const nextVersion = applyBump(baseline, bump);
-    const version = `${versionString(nextVersion)}-${qualifier}-${N}`;
+    const version = computeQualifiedVersion(latestTag.name, messages, N, qualifier);
 
     if (requireRelease) {
       setFailed(`require-release is true but HEAD is not tagged (computed '${version}')`);

@@ -1,26 +1,7 @@
-/**
- * test/index.test.js
- *
- * Action-specific tests for auto-semver.
- * Pure function and GitHub API helper tests live in shared/test/index.test.js.
- *
- * Run with: node --test test/index.test.js  (Node 18+)
- */
-
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { Bump, bumpFromCommit } from "../../shared/semver.js";
-
-// ── computeBump ───────────────────────────────────────────────────────────────
-// Tests the "reduce over all commits, highest bump wins, default patch" logic
-// that drives auto-semver's version decision.
-
-function computeBump(messages) {
-  let bump = Bump.NONE;
-  for (const m of messages) bump = Math.max(bump, bumpFromCommit(m));
-  if (bump === Bump.NONE) bump = Bump.PATCH;
-  return bump;
-}
+import { Bump } from "../../shared/semver.js";
+import { computeBump } from "../lib.js";
 
 describe("computeBump", () => {
   it("defaults to patch for empty list", () => {

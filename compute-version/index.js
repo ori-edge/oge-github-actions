@@ -27,12 +27,11 @@
 
 import * as core from "@actions/core";
 import { getOctokit } from "@actions/github";
-import {
-  Bump, bumpFromCommit, parseVersion, applyBump, versionString, sanitizeBranchName,
-} from "../shared/semver.js";
+import { sanitizeBranchName } from "../shared/semver.js";
 import {
   fetchSemverTags, resolveBase, commitMessagesSince, countAllCommits,
 } from "../shared/github-api.js";
+import { resolveRequireRelease, passthroughVersion, computeQualifiedVersion } from "./lib.js";
 
 async function run() {
   try {
@@ -43,23 +42,18 @@ async function run() {
     const headSha = process.env.GITHUB_SHA;
     if (!headSha) throw new Error("GITHUB_SHA environment variable is not set");
 
-    const requireReleaseInput = core.getInput("require-release");
-    const requireRelease =
-      (requireReleaseInput || process.env.ORI_REQUIRE_RELEASE_VERSION || "false")
-        .toLowerCase() === "true";
+    const requireRelease = resolveRequireRelease(
+      core.getInput("require-release"),
+      process.env.ORI_REQUIRE_RELEASE_VERSION,
+    );
 
     // Pass-through: explicit version supplied by caller
-    const explicitVersion = core.getInput("version");
-    if (explicitVersion) {
-      const isRelease = !explicitVersion.includes("-");
-      if (requireRelease && !isRelease) {
-        core.setFailed(`require-release is true but version '${explicitVersion}' is a pre-release`);
-        return;
-      }
-      core.info(`Using explicit version: ${explicitVersion}`);
-      core.setOutput("version", explicitVersion);
-      core.setOutput("tag", `v${explicitVersion}`);
-      core.setOutput("is-release", String(isRelease));
+    const passthrough = passthroughVersion(core.getInput("version"), requireRelease);
+    if (passthrough) {
+      core.info(`Using explicit version: ${passthrough.version}`);
+      core.setOutput("version", passthrough.version);
+      core.setOutput("tag", passthrough.tag);
+      core.setOutput("is-release", String(passthrough.isRelease));
       return;
     }
 
@@ -122,19 +116,11 @@ async function run() {
     core.info(`Latest tag : ${latestTag.name} @ ${latestTag.sha}`);
 
     const baseSha = await resolveBase(octokit, owner, repo, latestTag, headSha, depth, log);
-    const baseline = parseVersion(latestTag.name);
 
     const { messages, count: N } = await commitMessagesSince(octokit, owner, repo, baseSha, headSha, log);
     core.info(`Commits in range : ${messages.length} (total: ${N})`);
 
-    let bump = Bump.NONE;
-    for (const message of messages) {
-      bump = Math.max(bump, bumpFromCommit(message));
-    }
-    if (bump === Bump.NONE) bump = Bump.PATCH;
-
-    const nextVersion = applyBump(baseline, bump);
-    const version = `${versionString(nextVersion)}-${qualifier}-${N}`;
+    const version = computeQualifiedVersion(latestTag.name, messages, N, qualifier);
 
     if (requireRelease) {
       core.setFailed(`require-release is true but HEAD is not tagged (computed '${version}')`);
