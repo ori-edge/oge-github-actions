@@ -1,0 +1,22 @@
+name: "Semver tag"
+description: >
+  Computes the next semver from conventional commits since the last tag and tags HEAD
+  (both vX.Y.Z and X.Y.Z). No-op if HEAD is already tagged. No checkout required.
+  Caller's job must have permissions.contents: write. Pass a bot token by setting
+  GITHUB_TOKEN in the step or job environment; falls back to the default token.
+outputs:
+  version:
+    description: "Tagged version (e.g. '1.2.3'), empty string if nothing to release"
+    value: ${{ steps.semver.outputs.version }}
+runs:
+  using: composite
+  steps:
+    - id: semver
+      uses: ../auto-semver
+      with:
+        tag-parent-depth: '0'
+
+    - if: steps.semver.outputs.tag != ''
+      uses: ../tag
+      with:
+        tags: ${{ steps.semver.outputs.tag }},${{ steps.semver.outputs.version }}

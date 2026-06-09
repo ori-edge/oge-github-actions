@@ -31,20 +31,9 @@ jobs:
   gcp-helm-charts:
     runs-on: ${{ inputs.runsOn }}
     steps:
-      - name: Get workflow ref
-        id: wf-ref
-        run: echo "ref=${GITHUB_WORKFLOW_REF##*@}" >> $GITHUB_OUTPUT
-
-      - name: Checkout oge-github-actions
-        uses: actions/checkout@v6
-        with:
-          repository: ori-edge/oge-github-actions
-          ref: ${{ steps.wf-ref.outputs.ref }}
-          path: _oge-github-actions
-
       - name: Resolve chart version
         id: cv
-        uses: ./_oge-github-actions/compute-version
+        uses: ori-edge/oge-github-actions/compute-version@main
         with:
           version: ${{ inputs.chartVersion }}
         env:

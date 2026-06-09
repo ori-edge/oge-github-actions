@@ -1,0 +1,58 @@
+name: "Build and push Helm charts to GCP"
+description: >
+  Checks out the caller's repo, computes the chart version from git tags (or uses the
+  explicit chartVersion input), packages all matching Helm charts, and uploads them to
+  a GCP Cloud Storage bucket. Pass GCP_CREDENTIALS as an env var on the step.
+inputs:
+  chartsPath:
+    description: "glob pattern for chart directories"
+    required: false
+    default: "./charts/*"
+  gcpDestination:
+    description: "GCP Cloud Storage destination bucket/path"
+    required: true
+  chartVersion:
+    description: "explicit chart version; if empty, computed from git tags"
+    required: false
+    default: ""
+runs:
+  using: composite
+  steps:
+    - name: Resolve chart version
+      id: cv
+      uses: ../compute-version
+      with:
+        version: ${{ inputs.chartVersion }}
+
+    - name: Checkout
+      uses: actions/checkout@v6
+      with:
+        fetch-depth: 0
+        path: src
+
+    - name: Helm tool installer
+      uses: Azure/setup-helm@v5
+
+    - name: Package Helm Chart
+      shell: bash
+      working-directory: src
+      run: |
+        for dir in ${{ inputs.chartsPath }}; do
+          if [ -d "$dir" ]; then
+            helm package "$dir" --destination ./charts --version "${{ steps.cv.outputs.version }}"
+          fi
+        done
+
+    - name: Authenticate to Google Cloud
+      uses: google-github-actions/auth@v3
+      with:
+        credentials_json: ${{ env.GCP_CREDENTIALS }}
+
+    - name: Push chart to GCP Cloud Storage
+      uses: google-github-actions/upload-cloud-storage@v3
+      with:
+        path: src/charts
+        glob: "*.tgz"
+        process_gcloudignore: false
+        destination: ${{ inputs.gcpDestination }}
+        parent: false

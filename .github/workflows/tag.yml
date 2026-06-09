@@ -19,24 +19,15 @@ jobs:
     outputs:
       version: ${{ steps.semver.outputs.version }}
     steps:
-      - name: Get workflow ref
-        id: wf-ref
-        run: echo "ref=${GITHUB_WORKFLOW_REF##*@}" >> $GITHUB_OUTPUT
-
-      - uses: actions/checkout@v6
-        with:
-          repository: ori-edge/oge-github-actions
-          ref: ${{ steps.wf-ref.outputs.ref }}
-
       - id: semver
-        uses: ./auto-semver
+        uses: ori-edge/oge-github-actions/auto-semver@main
         with:
           tag-parent-depth: '0'
         env:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN || github.token }}
 
       - if: steps.semver.outputs.tag != ''
-        uses: ./tag
+        uses: ori-edge/oge-github-actions/tag@main
         with:
           tags: ${{ steps.semver.outputs.tag }},${{ steps.semver.outputs.version }}
         env:
