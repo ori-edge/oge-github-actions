@@ -71,9 +71,20 @@ runs:
 
     - name: Resolve image version
       id: cv
+      if: inputs.imageVersion == ''
       uses: ./../../_actions/current/compute-version
       with:
         version: ${{ inputs.imageVersion }}
+
+    - name: Set IMAGE_VERSION (explicit)
+      if: inputs.imageVersion != ''
+      shell: bash
+      run: echo "IMAGE_VERSION=${{ inputs.imageVersion }}" >> $GITHUB_ENV
+
+    - name: Set IMAGE_VERSION (computed)
+      if: inputs.imageVersion == ''
+      shell: bash
+      run: echo "IMAGE_VERSION=${{ steps.cv.outputs.version }}" >> $GITHUB_ENV
 
     - name: Set IMAGE_VERSION
       shell: bash
