@@ -1,18 +1,24 @@
 name: "Build and push Helm charts to GCP"
 description: >
-  Checks out the caller's repo, computes the chart version from git tags (or uses the
-  explicit chartVersion input), packages all matching Helm charts, and uploads them to
+  Checks out the caller's repo, packages all matching Helm charts, and uploads them to
   a GCP Cloud Storage bucket. Pass GCP_CREDENTIALS as an env var on the step.
+  chartMode controls how the chart version is resolved: empty (default) computes from
+  git tags (or passes through an explicit chartVersion); 'chart_ref' reads the version
+  from each chart's own Chart.yaml (for repos that manually bump their chart version).
 inputs:
   chartsPath:
     description: "glob pattern for chart directories"
     required: false
     default: "./charts/*"
+  chartMode:
+    description: "mode to resolve chart version: empty for git tags, 'chart_ref' to read from Chart.yaml"
+    required: false
+    default: ""
   gcpDestination:
     description: "GCP Cloud Storage destination bucket/path"
     required: true
   chartVersion:
-    description: "explicit chart version; if empty, computed from git tags"
+    description: "explicit chart version; if empty and chartMode is empty, computed from git tags"
     required: false
     default: ""
 runs:
@@ -26,7 +32,8 @@ runs:
       shell: bash
       run: ln -sf "$GITHUB_ACTION_PATH/.." /home/runner/work/_actions/current
 
-    - name: Resolve chart version
+    - name: Resolve chart version (GIT_TAG)
+      if: inputs.chartMode == ''
       id: cv
       uses: ./../../_actions/current/compute-version
       with:
@@ -45,7 +52,11 @@ runs:
       run: |
         for dir in ${{ inputs.chartsPath }}; do
           if [ -d "$dir" ]; then
-            helm package "$dir" --destination ./charts --version "${{ steps.cv.outputs.version }}"
+            if [[ "${{ inputs.chartMode }}" == "chart_ref" ]]; then
+              helm package "$dir" --destination ./charts
+            else
+              helm package "$dir" --destination ./charts --version "${{ steps.cv.outputs.version }}"
+            fi
           fi
         done
 

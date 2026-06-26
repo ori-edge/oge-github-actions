@@ -117,6 +117,25 @@ runs:
           exit 1
         fi
 
+    - name: Compute image tags
+      shell: bash
+      run: |
+        BASE="${{ inputs.dockerRegistry }}/${{ inputs.dockerRepo }}/${{ inputs.imageName }}"
+        TAGS="${BASE}:${{ env.IMAGE_VERSION }}"
+        BRANCH="${GITHUB_HEAD_REF:-}"
+        if [[ -z "$BRANCH" ]] && [[ "$GITHUB_REF" == refs/heads/* ]]; then
+          BRANCH="${GITHUB_REF#refs/heads/}"
+        fi
+        if [[ -n "$BRANCH" ]]; then
+          BRANCH_TAG=$(echo "$BRANCH" | sed 's/\//_/g')
+          if [[ "$BRANCH_TAG" != "${{ env.IMAGE_VERSION }}" ]]; then
+            TAGS="${TAGS}"$'\n'"${BASE}:${BRANCH_TAG}"
+          fi
+        fi
+        echo "DOCKER_TAGS<<EOF" >> $GITHUB_ENV
+        echo "$TAGS" >> $GITHUB_ENV
+        echo "EOF" >> $GITHUB_ENV
+
     - name: Generate build args
       shell: bash
       run: |
@@ -131,4 +150,4 @@ runs:
         build-args: ${{ env.BUILD_ARGS }}
         platforms: ${{ inputs.platforms }}
         push: ${{ inputs.push }}
-        tags: ${{ inputs.dockerRegistry }}/${{ inputs.dockerRepo }}/${{ inputs.imageName }}:${{ env.IMAGE_VERSION }}
+        tags: ${{ env.DOCKER_TAGS }}
