@@ -1,0 +1,78 @@
+name: "resolve-release-version"
+description: >
+  Determines the version to release on push to main. Behaviour depends on the
+  mode input:
+    manual (default): reads Chart.yaml and uses that version if it has not yet been
+      tagged. If the version is already tagged (no bump was made), outputs empty —
+      nothing to release. No auto-semver fallback; the caller controls releases by
+      bumping the chart.
+    auto: runs auto-semver to compute the next clean release version from
+      conventional commits since the last tag. Use this for repos that keep
+      a placeholder (e.g. 0.0.0-dev) in Chart.yaml and rely on CI to version releases.
+  Requires a checkout with fetch-depth: 0 in the calling job.
+  Set GITHUB_TOKEN in the step or job env.
+
+author: "ori-edge"
+
+inputs:
+  mode:
+    description: "'manual' (default) to release only when Chart.yaml version is new; 'auto' to always compute from conventional commits"
+    required: false
+    default: "manual"
+  chartPath:
+    description: "Path to Chart.yaml. Required when mode is 'manual'."
+    required: false
+    default: ""
+
+outputs:
+  version:
+    description: "Version to release, e.g. '1.2.3'. Empty if nothing to release."
+    value: ${{ steps.final-manual.outputs.version || steps.final-auto.outputs.version }}
+  tag:
+    description: "Tag to create, e.g. 'v1.2.3'. Empty if nothing to release."
+    value: ${{ steps.final-manual.outputs.tag || steps.final-auto.outputs.tag }}
+
+runs:
+  using: composite
+  steps:
+    - name: Link sibling actions
+      shell: bash
+      run: ln -sf "$GITHUB_ACTION_PATH/.." /home/runner/work/_actions/current
+
+    - name: Resolve version (manual)
+      id: manual
+      if: inputs.mode == 'manual'
+      shell: bash
+      run: |
+        if [[ -z "${{ inputs.chartPath }}" ]]; then
+          echo "ERROR: chartPath is required when mode is 'manual'"
+          exit 1
+        fi
+        CHART_VERSION=$(grep '^version:' ${{ inputs.chartPath }} | awk '{print $2}')
+        if ! git tag | grep -qx "v${CHART_VERSION}"; then
+          echo "version=${CHART_VERSION}" >> $GITHUB_OUTPUT
+          echo "tag=v${CHART_VERSION}" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Resolve version (auto)
+      id: auto
+      if: inputs.mode == 'auto'
+      uses: ./../../_actions/current/auto-semver
+      with:
+        tag-parent-depth: "0"
+
+    - name: Set final version (manual)
+      id: final-manual
+      if: inputs.mode == 'manual'
+      shell: bash
+      run: |
+        echo "version=${{ steps.manual.outputs.version }}" >> $GITHUB_OUTPUT
+        echo "tag=${{ steps.manual.outputs.tag }}" >> $GITHUB_OUTPUT
+
+    - name: Set final version (auto)
+      id: final-auto
+      if: inputs.mode == 'auto'
+      shell: bash
+      run: |
+        echo "version=${{ steps.auto.outputs.version }}" >> $GITHUB_OUTPUT
+        echo "tag=${{ steps.auto.outputs.tag }}" >> $GITHUB_OUTPUT
