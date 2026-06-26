@@ -122,15 +122,13 @@ runs:
       run: |
         BASE="${{ inputs.dockerRegistry }}/${{ inputs.dockerRepo }}/${{ inputs.imageName }}"
         TAGS="${BASE}:${{ env.IMAGE_VERSION }}"
-        BRANCH="${GITHUB_HEAD_REF:-}"
-        if [[ -z "$BRANCH" ]] && [[ "$GITHUB_REF" == refs/heads/* ]]; then
-          BRANCH="${GITHUB_REF#refs/heads/}"
+        if [[ "$GITHUB_REF" == refs/heads/* ]]; then
+          BRANCH_TAG=$(echo "${GITHUB_REF#refs/heads/}" | sed 's/\//_/g')
+        else
+          BRANCH_TAG=$(echo "$GITHUB_REF" | sed 's/\//_/g')
         fi
-        if [[ -n "$BRANCH" ]]; then
-          BRANCH_TAG=$(echo "$BRANCH" | sed 's/\//_/g')
-          if [[ "$BRANCH_TAG" != "${{ env.IMAGE_VERSION }}" ]]; then
-            TAGS="${TAGS}"$'\n'"${BASE}:${BRANCH_TAG}"
-          fi
+        if [[ -n "$BRANCH_TAG" ]] && [[ "$BRANCH_TAG" != "${{ env.IMAGE_VERSION }}" ]]; then
+          TAGS="${TAGS}"$'\n'"${BASE}:${BRANCH_TAG}"
         fi
         echo "DOCKER_TAGS<<EOF" >> $GITHUB_ENV
         echo "$TAGS" >> $GITHUB_ENV
