@@ -70,25 +70,106 @@ release:
 
 ---
 
+### resolve-release-version
+
+Determines the version to release on every push to main. Supports two modes
+selected via the `mode` input:
+
+- **`manual`** (old system): reads the version from `Chart.yaml`. If that version has
+  not yet been tagged, uses it as the release. If it is already tagged (no bump was
+  made), outputs empty — nothing to release. There is no auto-semver fallback; the
+  caller controls releases entirely by bumping the chart.
+- **`auto`** (default, new system): runs `auto-semver` to compute the next clean
+  release version from conventional commits since the last tag. Use this for repos
+  that keep a placeholder (e.g. `0.0.0-dev`) in `Chart.yaml`.
+
+Requires a checkout with `fetch-depth: 0` in the calling job.
+
+#### inputs
+
+| input     | required | default  | description                                                            |
+|-----------|----------|----------|------------------------------------------------------------------------|
+| mode      | false    | `manual` | `'manual'` or `'auto'` — see above                                    |
+| chartPath | false    |          | path to `Chart.yaml`; required when `mode` is `'manual'`              |
+
+#### env vars (pass as env: on the step)
+
+| var          | description                                      |
+|--------------|--------------------------------------------------|
+| GITHUB_TOKEN | GitHub token (read-only scope is enough for auto; not needed for manual) |
+
+#### outputs
+
+| output  | description                                                          |
+|---------|----------------------------------------------------------------------|
+| version | version to release, e.g. `1.2.3`. Empty if nothing to release.      |
+| tag     | tag to create, e.g. `v1.2.3`. Empty if nothing to release.          |
+
+#### example — manual mode (Chart.yaml controls the version)
+
+```yaml
+- uses: actions/checkout@v6
+  with: { fetch-depth: 0 }
+
+- id: version
+  uses: ori-edge/oge-github-actions/resolve-release-version@v0.25.0
+  with:
+    mode: manual
+    chartPath: charts/my-service/Chart.yaml
+
+- if: steps.version.outputs.tag != ''
+  uses: ori-edge/oge-github-actions/tag@v0.25.0
+  with:
+    tags: ${{ steps.version.outputs.tag }}
+  env:
+    GITHUB_TOKEN: ${{ secrets.GH_TOKEN || github.token }}
+```
+
+#### example — auto mode (conventional commits control the version)
+
+```yaml
+- uses: actions/checkout@v6
+  with: { fetch-depth: 0 }
+
+- id: version
+  uses: ori-edge/oge-github-actions/resolve-release-version@v0.25.0
+  env:
+    GITHUB_TOKEN: ${{ github.token }}
+
+- if: steps.version.outputs.tag != ''
+  uses: ori-edge/oge-github-actions/tag@v0.25.0
+  with:
+    tags: ${{ steps.version.outputs.tag }}
+  env:
+    GITHUB_TOKEN: ${{ secrets.GH_TOKEN || github.token }}
+```
+
+---
+
 ### docker-build
 
 Checks out the caller's repo, computes the image version, and builds/pushes a Docker image.
 Version is resolved via `compute-version`: if `imageVersion` is provided it is used directly; otherwise
 discovered from git tags.
 
+The image is always pushed with two tags: the resolved version and the current branch name
+(e.g. `main`). This ensures dev environments that track the `main` tag are updated on every merge.
+
 #### inputs
 
-| input          | required | default                 | description                                                                  |
-|----------------|----------|-------------------------|------------------------------------------------------------------------------|
-| buildArgs      | false    |                         | docker build args (see --build-arg in docker docs)                           |
-| buildContext   | false    | .                       | docker build context                                                         |
-| dockerFile     | false    |                         | path to the Dockerfile                                                       |
-| dockerRegistry | false    | quay.io                 | name of the docker registry                                                  |
-| dockerRepo     | false    | oriedge                 | name of the docker repository                                                |
-| imageName      | true     |                         | name of the docker image to be built                                         |
-| imageVersion   | false    |                         | explicit image version; if empty, computed from git tags via compute-version |
-| platforms      | false    | linux/amd64,linux/arm64 | comma-separated list of platforms to build for                               |
-| push           | false    | true                    | `'true'` to push the image to the registry                                   |
+| input           | required | default                 | description                                                                                          |
+|-----------------|----------|-------------------------|------------------------------------------------------------------------------------------------------|
+| buildArgs       | false    |                         | docker build args (see --build-arg in docker docs)                                                   |
+| buildContext    | false    | .                       | docker build context                                                                                 |
+| chartPath       | false    |                         | path to `Chart.yaml`; required when `dockerImageMode` is `chart_ref`                                |
+| dockerFile      | false    |                         | path to the Dockerfile                                                                               |
+| dockerImageMode | false    |                         | `chart_ref` — read version from `Chart.yaml`; `branch_ref` — use branch name; empty — git tags     |
+| dockerRegistry  | false    | quay.io                 | name of the docker registry                                                                          |
+| dockerRepo      | false    | oriedge                 | name of the docker repository                                                                        |
+| imageName       | true     |                         | name of the docker image to be built                                                                 |
+| imageVersion    | false    |                         | explicit image version; takes precedence over all other version resolution                           |
+| platforms       | false    | linux/amd64,linux/arm64 | comma-separated list of platforms to build for                                                       |
+| push            | false    | true                    | `'true'` to push the image to the registry                                                           |
 
 #### env vars (pass as env: on the step)
 
@@ -149,11 +230,12 @@ otherwise discovered from git tags.
 
 #### inputs
 
-| input          | required | default    | description                                              |
-|----------------|----------|------------|----------------------------------------------------------|
-| chartsPath     | false    | ./charts/* | path to chart files (including glob pattern)             |
-| chartVersion   | false    |            | explicit chart version; if empty, computed from git tags |
-| gcpDestination | true     |            | GCP directory where the packaged chart will be uploaded  |
+| input          | required | default    | description                                                                                       |
+|----------------|----------|------------|---------------------------------------------------------------------------------------------------|
+| chartsPath     | false    | ./charts/* | path to chart files (including glob pattern)                                                      |
+| chartMode      | false    |            | `chart_ref` — read version from each chart's own `Chart.yaml`; empty — use `chartVersion` or git tags |
+| chartVersion   | false    |            | explicit chart version; if empty and `chartMode` is empty, computed from git tags                 |
+| gcpDestination | true     |            | GCP directory where the packaged chart will be uploaded                                           |
 
 #### env vars (pass as env: on the step)
 
