@@ -65,6 +65,11 @@ runs:
 
     - name: Run govulncheck-filter
       shell: bash
+      env:
+        # govulncheck-filter is a private ori-edge module: fetch it directly via
+        # git (authenticated above) and skip the public proxy/checksum DB, which
+        # cannot see it and returns 500 on verification.
+        GOPRIVATE: github.com/ori-edge/*
       run: |
         go install "golang.org/x/vuln/cmd/govulncheck@${{ inputs.govulncheckVersion }}"
         go install "github.com/ori-edge/govulncheck-filter@${{ inputs.govulncheckFilterVersion }}"
