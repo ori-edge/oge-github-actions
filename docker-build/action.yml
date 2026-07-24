@@ -51,6 +51,12 @@ inputs:
 runs:
   using: composite
   steps:
+    - name: Connect to Tailscale
+      if: env.GOPROXY_TAILSCALE_AUTHKEY != ''
+      uses: tailscale/github-action@v3
+      with:
+        authkey: ${{ env.GOPROXY_TAILSCALE_AUTHKEY }}
+
     - name: Checkout
       uses: actions/checkout@v6
       with:
@@ -149,3 +155,4 @@ runs:
         platforms: ${{ inputs.platforms }}
         push: ${{ inputs.push }}
         tags: ${{ env.DOCKER_TAGS }}
+        network: ${{ env.GOPROXY_TAILSCALE_AUTHKEY != '' && 'host' || '' }}

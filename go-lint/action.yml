@@ -1,0 +1,55 @@
+name: "Go lint"
+description: >
+  Checks out the caller's repo, sets up Go via mise, and runs golangci-lint.
+  Set GOPROXY_TAILSCALE_AUTHKEY as a workflow-level env var to connect to
+  Tailscale before fetching modules (required for private Go module proxies).
+inputs:
+  goVersionFile:
+    description: "path to file containing Go version (e.g., go.mod); ignored when mise.toml is present"
+    default: "go.mod"
+    required: false
+  args:
+    description: "additional arguments to pass to golangci-lint"
+    default: "--issues-exit-code=1 --timeout=5m"
+    required: false
+  onlyNewIssues:
+    description: "'true' to report only new issues introduced by the PR"
+    default: "true"
+    required: false
+runs:
+  using: composite
+  steps:
+    - name: Connect to Tailscale
+      if: env.GOPROXY_TAILSCALE_AUTHKEY != ''
+      uses: tailscale/github-action@v3
+      with:
+        authkey: ${{ env.GOPROXY_TAILSCALE_AUTHKEY }}
+
+    - name: Check out
+      uses: actions/checkout@v6
+
+    - name: Create mise.toml from goVersionFile
+      if: hashFiles('mise.toml') == ''
+      shell: bash
+      run: |
+        ver=$(grep -m1 '^go ' "${{ inputs.goVersionFile }}" | awk '{print $2}' \
+              || cat "${{ inputs.goVersionFile }}")
+        printf '[tools]\ngo = "%s"\n' "$ver" > mise.toml
+
+    - name: Setup mise
+      uses: jdx/mise-action@v4
+      env:
+        MISE_GO_SET_GOBIN: 'false'
+
+    - name: Setup Go
+      uses: actions/setup-go@v6
+      with:
+        cache-dependency-path: |
+          go.sum
+          mise.toml
+
+    - name: golangci-lint
+      uses: golangci/golangci-lint-action@v9
+      with:
+        only-new-issues: ${{ inputs.onlyNewIssues }}
+        args: ${{ inputs.args }}
