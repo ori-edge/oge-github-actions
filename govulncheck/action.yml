@@ -20,7 +20,7 @@ inputs:
     required: false
   govulncheckVersion:
     description: "version of golang.org/x/vuln/cmd/govulncheck to install"
-    default: "v1.2.0"
+    default: "v1.5.0"
     required: false
   govulncheckFilterVersion:
     description: "version of github.com/ori-edge/govulncheck-filter to install"
@@ -52,6 +52,8 @@ runs:
           go.sum
           mise.toml
 
+    # Needed so govulncheck can build a repo that imports private ori-edge
+    # modules. govulncheck-filter itself is public.
     - name: Configure GitHub authentication
       shell: bash
       run: |
@@ -65,14 +67,15 @@ runs:
 
     - name: Run govulncheck-filter
       shell: bash
-      env:
-        # govulncheck-filter is a private ori-edge module: fetch it directly via
-        # git (authenticated above) and skip the public proxy/checksum DB, which
-        # cannot see it and returns 500 on verification.
-        GOPRIVATE: github.com/ori-edge/*
       run: |
-        go install "golang.org/x/vuln/cmd/govulncheck@${{ inputs.govulncheckVersion }}"
-        go install "github.com/ori-edge/govulncheck-filter@${{ inputs.govulncheckFilterVersion }}"
+        # Prefer the versions the caller pins in mise.toml (single source of
+        # truth); only install when the tool is not already on PATH.
+        if ! command -v govulncheck >/dev/null 2>&1; then
+          go install "golang.org/x/vuln/cmd/govulncheck@${{ inputs.govulncheckVersion }}"
+        fi
+        if ! command -v govulncheck-filter >/dev/null 2>&1; then
+          go install "github.com/ori-edge/govulncheck-filter@${{ inputs.govulncheckFilterVersion }}"
+        fi
 
         # govulncheck-filter runs govulncheck itself (adds -format json), enforces
         # .govulncheck-ignore.yaml (found by walking up to the module root; a

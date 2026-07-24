@@ -418,7 +418,7 @@ allow:
 | goVersionFile                  | false    | go.mod     | path to file containing Go version; ignored when mise.toml is present                        |
 | failOnFixableVulnerabilities   | false    | `'true'`   | `'true'` to fail the build on policy violations; `'false'` downgrades them to a warning      |
 | failOnUnfixableVulnerabilities | false    | `'false'`  | `'true'` to also treat called vulnerabilities with no fix available as violations            |
-| govulncheckVersion             | false    | `'v1.2.0'` | version of `golang.org/x/vuln/cmd/govulncheck` to install                                     |
+| govulncheckVersion             | false    | `'v1.5.0'` | version of `golang.org/x/vuln/cmd/govulncheck` to install                                     |
 | govulncheckFilterVersion       | false    | `'v0.0.3'` | version of `github.com/ori-edge/govulncheck-filter` to install                               |
 
 #### env vars (pass as env: on the step)
