@@ -1,16 +1,30 @@
 name: "Go vulnerability check"
 description: >
-  Checks out the caller's repo, sets up Go via mise, and runs govulncheck.
-  Fails if fixable vulnerabilities are found in code paths (configurable).
-  Pass GH_TOKEN as an env var on the step if private module access is needed.
+  Checks out the caller's repo, sets up Go via mise, and runs govulncheck through
+  govulncheck-filter, which enforces a time-boxed .govulncheck-ignore.yaml
+  allowlist. Any called vulnerability without a valid, in-window allowlist entry
+  fails the build (configurable). Pass GH_TOKEN as an env var on the step if
+  private module access is needed.
 inputs:
   goVersionFile:
     description: "path to file containing Go version (e.g., go.mod); ignored when mise.toml is present"
     default: "go.mod"
     required: false
   failOnFixableVulnerabilities:
-    description: "'true' to fail when fixable vulnerabilities are found in code paths"
+    description: "'true' to fail the build on policy violations; 'false' downgrades them to a warning"
     default: "true"
+    required: false
+  failOnUnfixableVulnerabilities:
+    description: "'true' to also treat called vulnerabilities with no fix available as violations; 'false' reports them as warnings only"
+    default: "false"
+    required: false
+  govulncheckVersion:
+    description: "version of golang.org/x/vuln/cmd/govulncheck to install"
+    default: "v1.5.0"
+    required: false
+  govulncheckFilterVersion:
+    description: "version of github.com/ori-edge/govulncheck-filter to install"
+    default: "v0.0.3"
     required: false
 runs:
   using: composite
@@ -38,6 +52,8 @@ runs:
           go.sum
           mise.toml
 
+    # Needed so govulncheck can build a repo that imports private ori-edge
+    # modules. govulncheck-filter itself is public.
     - name: Configure GitHub authentication
       shell: bash
       run: |
@@ -49,60 +65,29 @@ runs:
       shell: bash
       run: echo "$(go env GOBIN)" >> $GITHUB_PATH
 
-    - name: Run govulncheck
+    - name: Run govulncheck-filter
       shell: bash
       run: |
-        go install golang.org/x/vuln/cmd/govulncheck@v1.2.0
-
-        # Run with JSON output and capture result
-        govulncheck -json ./... > vulns.json 2>&1 || true
-
-        # Always show human-readable output first
-        echo "=== govulncheck results ==="
-        govulncheck ./... 2>&1 || true
-        echo "==========================="
-
-        # Analyze vulnerabilities using jq
-        # - Group by OSV ID
-        # - Check if fix is available (fixed_version field exists)
-        # - Check if code actually calls vulnerable function (trace has position field)
-        ANALYSIS=$(jq -s '
-          [.[] | select(.finding)] |
-          group_by(.finding.osv) |
-          map({
-            osv: .[0].finding.osv,
-            has_fix: ([.[] | select(.finding.fixed_version)] | length > 0),
-            is_called: ([.[] | select(.finding.trace[0].position)] | length > 0)
-          })
-        ' vulns.json)
-
-        TOTAL=$(echo "$ANALYSIS" | jq 'length')
-        CALLED_WITH_FIX=$(echo "$ANALYSIS" | jq '[.[] | select(.has_fix and .is_called)] | length')
-        CALLED_NO_FIX=$(echo "$ANALYSIS" | jq '[.[] | select(.is_called and (.has_fix | not))] | length')
-        NOT_CALLED_WITH_FIX=$(echo "$ANALYSIS" | jq '[.[] | select(.has_fix and (.is_called | not))] | length')
-
-        echo "Summary:"
-        echo "  Total vulnerabilities: $TOTAL"
-        echo "  Called by code with fix available: $CALLED_WITH_FIX (action required)"
-        echo "  Called by code without fix: $CALLED_NO_FIX (no action possible)"
-        echo "  Not called but fixable: $NOT_CALLED_WITH_FIX (low priority)"
-
-        if [ "$CALLED_WITH_FIX" -gt 0 ]; then
-          echo ""
-          echo "Fixable vulnerabilities that your code calls:"
-          echo "$ANALYSIS" | jq -r '.[] | select(.has_fix and .is_called) | "  - \(.osv)"'
-          if [ "${{ inputs.failOnFixableVulnerabilities }}" = "true" ]; then
-            echo "::error::Fixable vulnerabilities found in code paths - please update dependencies"
-            exit 1
-          else
-            echo "::warning::Fixable vulnerabilities found in code paths - please update dependencies"
-          fi
-        elif [ "$NOT_CALLED_WITH_FIX" -gt 0 ]; then
-          echo "::warning::Fixable vulnerabilities in dependencies (not called by your code)"
+        # Prefer the versions the caller pins in mise.toml (single source of
+        # truth); only install when the tool is not already on PATH.
+        if ! command -v govulncheck >/dev/null 2>&1; then
+          go install "golang.org/x/vuln/cmd/govulncheck@${{ inputs.govulncheckVersion }}"
+        fi
+        if ! command -v govulncheck-filter >/dev/null 2>&1; then
+          go install "github.com/ori-edge/govulncheck-filter@${{ inputs.govulncheckFilterVersion }}"
         fi
 
-        if [ "$CALLED_NO_FIX" -gt 0 ]; then
-          echo "::warning::Vulnerabilities found in code paths but no fixes available yet"
+        # govulncheck-filter runs govulncheck itself (adds -format json), enforces
+        # .govulncheck-ignore.yaml (found by walking up to the module root; a
+        # missing file means no exceptions), emits per-module ::error/::warning
+        # annotations against go.mod, and owns the exit code. No pipe, so
+        # `set -o pipefail` has nothing to trip on.
+        args=(-invoke -github-annotations)
+        if [ "${{ inputs.failOnUnfixableVulnerabilities }}" != "true" ]; then
+          args+=(-ignore-unfixable)
+        fi
+        if [ "${{ inputs.failOnFixableVulnerabilities }}" != "true" ]; then
+          args+=(-warn-only)
         fi
 
-        exit 0
+        govulncheck-filter "${args[@]}" -- ./...
