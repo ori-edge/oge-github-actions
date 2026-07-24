@@ -390,18 +390,36 @@ jobs:
 
 ### govulncheck
 
-Runs Go vulnerability checking using [govulncheck](https://pkg.go.dev/golang.org/x/vuln/cmd/govulncheck).
-Distinguishes between:
-- Fixable vulnerabilities called by your code (fails by default)
-- Fixable vulnerabilities in dependencies not called by your code (warning)
-- Vulnerabilities without available fixes (warning)
+Runs Go vulnerability checking using [govulncheck](https://pkg.go.dev/golang.org/x/vuln/cmd/govulncheck),
+gated by [govulncheck-filter](https://github.com/ori-edge/govulncheck-filter).
+Every vulnerability **called** by your code must have a valid, in-window entry in
+a `.govulncheck-ignore.yaml` allowlist or the build fails. Each entry is scoped to
+`(id, module)`, carries a `review` date, and:
+- an unlisted called vulnerability fails the build
+- a `review` date more than 30 days in the future fails (no indefinite parking)
+- a past `review` date with the vulnerability still called fails (grace expired)
+- vulnerabilities with no fix available yet are warnings by default (see `failOnUnfixableVulnerabilities`)
+
+The allowlist is found by walking up from the checkout to the module root (first
+`go.mod`); a missing file means no exceptions. Example `.govulncheck-ignore.yaml`:
+
+```yaml
+allow:
+  - id: GO-2024-1234
+    module: golang.org/x/net
+    review: 2026-08-10
+    reason: awaiting upstream fix, tracked in OGE-9999
+```
 
 #### inputs
 
-| input                        | required | default  | description                                                           |
-|------------------------------|----------|----------|-----------------------------------------------------------------------|
-| goVersionFile                | false    | go.mod   | path to file containing Go version; ignored when mise.toml is present |
-| failOnFixableVulnerabilities | false    | `'true'` | `'true'` to fail when fixable vulnerabilities are found in code paths |
+| input                          | required | default    | description                                                                                  |
+|--------------------------------|----------|------------|----------------------------------------------------------------------------------------------|
+| goVersionFile                  | false    | go.mod     | path to file containing Go version; ignored when mise.toml is present                        |
+| failOnFixableVulnerabilities   | false    | `'true'`   | `'true'` to fail the build on policy violations; `'false'` downgrades them to a warning      |
+| failOnUnfixableVulnerabilities | false    | `'false'`  | `'true'` to also treat called vulnerabilities with no fix available as violations            |
+| govulncheckVersion             | false    | `'v1.2.0'` | version of `golang.org/x/vuln/cmd/govulncheck` to install                                     |
+| govulncheckFilterVersion       | false    | `'v0.0.3'` | version of `github.com/ori-edge/govulncheck-filter` to install                               |
 
 #### env vars (pass as env: on the step)
 
