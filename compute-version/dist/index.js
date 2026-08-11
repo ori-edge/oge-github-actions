@@ -36331,6 +36331,9 @@ function parseVersion(s) {
 }
 
 function applyBump(v, bump) {
+  // Before 1.0.0, a breaking change bumps the minor. The move to 1.0.0 is a
+  // release commitment. A commit must not make that decision.
+  if (bump === Bump.MAJOR && v.major === 0) return { major: 0, minor: v.minor + 1, patch: 0 };
   if (bump === Bump.MAJOR) return { major: v.major + 1, minor: 0, patch: 0 };
   if (bump === Bump.MINOR) return { major: v.major, minor: v.minor + 1, patch: 0 };
   return { major: v.major, minor: v.minor, patch: v.patch + 1 };

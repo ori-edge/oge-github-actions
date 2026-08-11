@@ -141,6 +141,21 @@ describe("applyBump", () => {
   it("major increments major and resets minor + patch", () => {
     assert.deepEqual(applyBump(base, Bump.MAJOR), { major: 2, minor: 0, patch: 0 });
   });
+
+  describe("before 1.0.0", () => {
+    it("major increments minor and resets patch", () => {
+      assert.deepEqual(applyBump({ major: 0, minor: 4, patch: 7 }, Bump.MAJOR), { major: 0, minor: 5, patch: 0 });
+    });
+    it("major on 0.0.x increments minor", () => {
+      assert.deepEqual(applyBump({ major: 0, minor: 0, patch: 3 }, Bump.MAJOR), { major: 0, minor: 1, patch: 0 });
+    });
+    it("minor increments minor", () => {
+      assert.deepEqual(applyBump({ major: 0, minor: 4, patch: 7 }, Bump.MINOR), { major: 0, minor: 5, patch: 0 });
+    });
+    it("patch increments patch", () => {
+      assert.deepEqual(applyBump({ major: 0, minor: 4, patch: 7 }, Bump.PATCH), { major: 0, minor: 4, patch: 8 });
+    });
+  });
 });
 
 // ── semver.js: versionString ──────────────────────────────────────────────────
