@@ -106,6 +106,14 @@ The highest bump across all commits since the last tag wins.
 Full commit messages are scanned — not just the subject line — so
 `BREAKING CHANGE` footers in squash-merge bodies are correctly detected.
 
+### Before 1.0.0
+
+While the last tag is `0.x.y`, a `major` bump increments the minor: `0.4.7`
+becomes `0.5.0`. The move to `1.0.0` is a release commitment. A commit must not
+make that decision. Tag `v1.0.0` by hand when the API is ready.
+
+The `bump` output still reports `major` in this case.
+
 ## Tagging topology
 
 ### Regular tagging
