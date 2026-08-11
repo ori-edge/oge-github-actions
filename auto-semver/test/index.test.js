@@ -20,6 +20,18 @@ describe("computeBump", () => {
     assert.equal(computeBump(["feat: x\n\nBREAKING CHANGE: y", "fix: z"]), Bump.MAJOR);
   });
 
+  it("BREAKING-CHANGE footer variant elevates to major", () => {
+    assert.equal(computeBump(["feat: x\n\nBREAKING-CHANGE: y"]), Bump.MAJOR);
+  });
+
+  it("lowercase 'breaking change' prose is not a footer", () => {
+    assert.equal(computeBump(["feat: x\n\nthis marks a\nbreaking change."]), Bump.MINOR);
+  });
+
+  it("uppercase BREAKING CHANGE without colon is not a footer", () => {
+    assert.equal(computeBump(["feat: x\n\nBREAKING CHANGE guidance text"]), Bump.MINOR);
+  });
+
   it("single patch commit gives patch", () => {
     assert.equal(computeBump(["chore: tidy"]), Bump.PATCH);
   });

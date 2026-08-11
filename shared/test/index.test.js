@@ -91,8 +91,8 @@ describe("bumpFromCommit", () => {
     assert.equal(bumpFromCommit("fix: cfg\n\nBREAKING-CHANGE: key renamed"), Bump.MAJOR);
   });
 
-  it("is case-insensitive for BREAKING CHANGE", () => {
-    assert.equal(bumpFromCommit("chore: tidy\n\nbreaking change: something"), Bump.MAJOR);
+  it("requires uppercase BREAKING CHANGE per spec", () => {
+    assert.equal(bumpFromCommit("chore: tidy\n\nbreaking change: something"), Bump.PATCH);
   });
 
   it("ignores conventional type prefixes in body", () => {
