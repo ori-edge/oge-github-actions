@@ -36313,7 +36313,9 @@ function bumpFromCommit(message) {
   const lines = message.split("\n");
   const subject = lines[0].trim();
   if (/^[a-z]+(\([^)]+\))?!:/.test(subject)) return Bump.MAJOR;
-  if (lines.some((l) => /^BREAKING[- ]CHANGE/i.test(l.trim()))) return Bump.MAJOR;
+  // Uppercase + colon per spec; anything looser false-positives on prose like
+  // "breaking change." wrapped to a line start in squash bodies.
+  if (lines.some((l) => /^BREAKING[- ]CHANGE:/.test(l.trim()))) return Bump.MAJOR;
   const m = subject.match(/^([a-z]+)(\([^)]+\))?:/);
   if (!m) return Bump.PATCH;
   return m[1] === "feat" ? Bump.MINOR : Bump.PATCH;
