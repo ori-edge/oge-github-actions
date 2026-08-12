@@ -1,7 +1,49 @@
 version: 2
 updates:
-  - package-ecosystem: github-actions
-    directory: "/"
+  - package-ecosystem: "github-actions"
+    directories:
+      - "/"
+      - "/auto-semver"
+      - "/compute-version"
+      - "/docker-build"
+      - "/docker-scan"
+      - "/gcp-helm-charts"
+      - "/go-integration-test"
+      - "/go-unit-test"
+      - "/govulncheck"
+      - "/helm-lint"
+      - "/resolve-release-version"
+      - "/tag"
+      - "/tag-helm-release"
+      - "/tag-semver"
+      - "/wait-for-deploy"
     schedule:
-      interval: daily
-    open-pull-requests-limit: 10
+      interval: "weekly"
+    commit-message:
+      prefix: "chore"
+    cooldown:
+      default-days: 7
+    groups:
+      github-actions:
+        applies-to: version-updates
+        patterns:
+          - "*"
+
+  - package-ecosystem: "npm"
+    directories:
+      - "/auto-semver"
+      - "/compute-version"
+      - "/shared"
+      - "/tag"
+      - "/tag-helm-release"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "chore"
+    cooldown:
+      default-days: 7
+    groups:
+      npm:
+        applies-to: version-updates
+        patterns:
+          - "*"
