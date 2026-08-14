@@ -46,13 +46,13 @@ runs:
   steps:
     - name: Check out
       if: inputs.skip != 'true'
-      uses: actions/checkout@v6
+      uses: actions/checkout@v7
       with:
         fetch-depth: 0
 
     - name: Download build artifact
       if: inputs.skip != 'true' && inputs.buildArtifactName != ''
-      uses: actions/download-artifact@v4
+      uses: actions/download-artifact@v8
       with:
         name: ${{ inputs.buildArtifactName }}
         path: ${{ inputs.buildArtifactName }}/
@@ -75,7 +75,7 @@ runs:
 
     - name: Setup Go
       if: inputs.skip != 'true'
-      uses: actions/setup-go@v6
+      uses: actions/setup-go@v7
       with:
         cache-dependency-path: |
           go.sum
@@ -120,7 +120,7 @@ runs:
 
     - name: Upload Coverage Report
       if: inputs.uploadToCodecov == 'true'
-      uses: codecov/codecov-action@v6
+      uses: codecov/codecov-action@v7
       with:
         token: ${{ env.CODECOV_TOKEN }}
         files: ${{ inputs.coverageFilePath }}
