@@ -30,7 +30,7 @@ runs:
   using: composite
   steps:
     - name: Check out
-      uses: actions/checkout@v6
+      uses: actions/checkout@v7
 
     - name: Create mise.toml from goVersionFile
       if: hashFiles('mise.toml') == ''
@@ -46,7 +46,7 @@ runs:
         MISE_GO_SET_GOBIN: 'false'
 
     - name: Setup Go
-      uses: actions/setup-go@v6
+      uses: actions/setup-go@v7
       with:
         cache-dependency-path: |
           go.sum
