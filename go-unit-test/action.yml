@@ -52,12 +52,22 @@ runs:
       env:
         MISE_GO_SET_GOBIN: 'false'
 
-    - name: Setup Go
-      uses: actions/setup-go@v7
+    - name: Determine Go cache paths
+      id: gocache
+      shell: bash
+      run: |
+        echo "gomodcache=$(go env GOMODCACHE)" >> "$GITHUB_OUTPUT"
+        echo "gocache=$(go env GOCACHE)" >> "$GITHUB_OUTPUT"
+
+    - name: Cache Go build and module cache
+      uses: actions/cache@v4
       with:
-        cache-dependency-path: |
-          go.sum
-          mise.toml
+        path: |
+          ${{ steps.gocache.outputs.gomodcache }}
+          ${{ steps.gocache.outputs.gocache }}
+        key: ${{ runner.os }}-go-${{ hashFiles('go.sum', 'mise.toml') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
 
     - name: Configure GitHub authentication
       shell: bash
