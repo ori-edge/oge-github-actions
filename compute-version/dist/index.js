@@ -36402,24 +36402,58 @@ async function isAncestorOf(octokit, owner, repo, ancestorSha, headSha) {
 }
 
 async function resolveBase(octokit, owner, repo, tag, headSha, depth, log = () => {}) {
-  if (await isAncestorOf(octokit, owner, repo, tag.sha, headSha)) {
-    log(`Tag ${tag.name} commit ${tag.sha} is directly on the current branch`);
-    return tag.sha;
-  }
-
-  const baseSha = await walkFirstParents(octokit, owner, repo, tag.sha, depth);
-  log(`Tag ${tag.name}: walked ${depth} parent(s) from ${tag.sha} → ${baseSha}`);
-
-  if (await isAncestorOf(octokit, owner, repo, baseSha, headSha)) {
-    log(`Base commit ${baseSha} is on the current branch ✓`);
-    return baseSha;
-  }
+  const { baseSha, parentSha } = await baseOnBranch(octokit, owner, repo, tag, headSha, depth, log);
+  if (baseSha) return baseSha;
 
   throw new Error(
     `Tag ${tag.name}: neither the tag commit (${tag.sha}) nor its depth-${depth} ` +
-    `first-parent (${baseSha}) is an ancestor of HEAD (${headSha}). ` +
+    `first-parent (${parentSha}) is an ancestor of HEAD (${headSha}). ` +
     `Check your tagging topology or adjust tag-parent-depth.`,
   );
+}
+
+/**
+ * findBaseTag walks the semver tags from newest to oldest and returns the
+ * first tag that is on the current branch, with its base commit.
+ *
+ * A newer tag can be off the branch: a release that main cut after a pull
+ * request branched off it. The pull request then builds from the release that
+ * it branched from, rather than failing until it merges main.
+ *
+ * semverTags must be sorted oldest first, as fetchSemverTags returns them.
+ */
+async function findBaseTag(octokit, owner, repo, semverTags, headSha, depth, log = () => {}) {
+  for (let i = semverTags.length - 1; i >= 0; i--) {
+    const tag = semverTags[i];
+    const { baseSha } = await baseOnBranch(octokit, owner, repo, tag, headSha, depth, log);
+    if (baseSha) return { tag, baseSha };
+    log(`Tag ${tag.name} is not on the current branch, trying an older tag`);
+  }
+  throw new Error(
+    `No semver tag, nor its depth-${depth} first-parent, is an ancestor of HEAD (${headSha}). ` +
+    `Check your tagging topology or adjust tag-parent-depth.`,
+  );
+}
+
+/**
+ * baseOnBranch finds the base commit of one tag: the tag commit, or its
+ * depth-th first-parent, when that commit is an ancestor of HEAD. baseSha is
+ * null when neither is. parentSha is the first-parent that it walked to.
+ */
+async function baseOnBranch(octokit, owner, repo, tag, headSha, depth, log) {
+  if (await isAncestorOf(octokit, owner, repo, tag.sha, headSha)) {
+    log(`Tag ${tag.name} commit ${tag.sha} is directly on the current branch`);
+    return { baseSha: tag.sha, parentSha: null };
+  }
+
+  const parentSha = await walkFirstParents(octokit, owner, repo, tag.sha, depth);
+  log(`Tag ${tag.name}: walked ${depth} parent(s) from ${tag.sha} → ${parentSha}`);
+
+  if (await isAncestorOf(octokit, owner, repo, parentSha, headSha)) {
+    log(`Base commit ${parentSha} is on the current branch ✓`);
+    return { baseSha: parentSha, parentSha };
+  }
+  return { baseSha: null, parentSha };
 }
 
 async function commitMessagesSince(octokit, owner, repo, baseSha, headSha, log = () => {}) {
@@ -36610,10 +36644,12 @@ async function run() {
       return;
     }
 
-    const latestTag = semverTags[semverTags.length - 1];
-    info(`Latest tag : ${latestTag.name} @ ${latestTag.sha}`);
-
-    const baseSha = await resolveBase(octokit, owner, repo, latestTag, headSha, depth, log);
+    // The newest tag on this branch, which is not always the newest tag of the
+    // repository: main can release after a pull request branched off it.
+    const { tag: latestTag, baseSha } = await findBaseTag(
+      octokit, owner, repo, semverTags, headSha, depth, log,
+    );
+    info(`Base tag   : ${latestTag.name} @ ${latestTag.sha}`);
 
     const { messages, count: N } = await commitMessagesSince(octokit, owner, repo, baseSha, headSha, log);
     info(`Commits in range : ${messages.length} (total: ${N})`);
