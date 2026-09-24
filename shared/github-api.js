@@ -110,7 +110,7 @@ export async function commitMessagesSince(octokit, owner, repo, baseSha, headSha
     per_page: 250,
   });
 
-  const { status, total_commits, commits, commits_url } = comparison.data;
+  const { status, total_commits, commits } = comparison.data;
 
   if (status === "behind" || status === "identical") {
     return { messages: [], count: 0 };
@@ -120,14 +120,20 @@ export async function commitMessagesSince(octokit, owner, repo, baseSha, headSha
     return { messages: commits.map((c) => c.commit.message), count: total_commits };
   }
 
+  // The comparison has no URL for its commits. Page through the comparison
+  // itself: with a page parameter, it returns every commit of the range.
   log(`Range has ${total_commits} commits (>250) — paginating`);
-  const baseUrl = commits_url.split("?")[0];
   const messages = [];
-  for await (const resp of octokit.paginate.iterator(
-    "GET " + baseUrl.replace("https://api.github.com", ""),
-    { per_page: 100 },
-  )) {
-    for (const c of resp.data) messages.push(c.commit.message);
+  for (let page = 1; messages.length < total_commits; page++) {
+    const { data } = await octokit.rest.repos.compareCommitsWithBasehead({
+      owner,
+      repo,
+      basehead: `${baseSha}...${headSha}`,
+      per_page: 100,
+      page,
+    });
+    if (data.commits.length === 0) break;
+    for (const c of data.commits) messages.push(c.commit.message);
   }
   return { messages, count: total_commits };
 }
