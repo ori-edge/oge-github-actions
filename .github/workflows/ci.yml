@@ -9,6 +9,8 @@ on:
       - "tag/**"
       - "tag-helm-release/**"
       - "shared/**"
+      - ".github/workflows/ci.yml"
+      - ".github/scripts/**"
   pull_request:
     branches: [main]
     paths:
@@ -17,6 +19,8 @@ on:
       - "tag/**"
       - "tag-helm-release/**"
       - "shared/**"
+      - ".github/workflows/ci.yml"
+      - ".github/scripts/**"
 
 jobs:
   lint-pr:
@@ -66,14 +70,21 @@ jobs:
   build:
     name: Build all dist
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # Build dist on the pull request and commit it to the pull request branch.
+    # The rules on main reject a push from CI, so dist must arrive with the
+    # pull request. A pull request from a fork or from dependabot gets a
+    # read-only token, so the job skips it.
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.actor != 'dependabot[bot]'
     needs: [shared-test, test]
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v7
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          ref: ${{ github.event.pull_request.head.sha }}
 
       - uses: actions/setup-node@v7
         with:
@@ -86,19 +97,24 @@ jobs:
             (cd "$action" && npm ci && npm run build)
           done
 
-      - name: Commit dist if changed
+      - name: Commit dist to the pull request
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BRANCH: ${{ github.event.pull_request.head.ref }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
-          git config user.name  "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
           git add auto-semver/dist/ compute-version/dist/ tag/dist/ tag-helm-release/dist/
-          git diff --staged --quiet || git commit -m "chore: rebuild dist [skip ci]"
-          git push origin main
+          if git diff --staged --quiet; then
+            echo "dist is up to date"
+            exit 0
+          fi
+          node .github/scripts/commit-dist.mjs
 
   self-test:
     name: Self Test
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: build
+    needs: [shared-test, test]
     steps:
       - uses: actions/checkout@v7
         with:
