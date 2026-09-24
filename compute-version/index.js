@@ -29,7 +29,7 @@ import * as core from "@actions/core";
 import { getOctokit } from "@actions/github";
 import { sanitizeBranchName } from "../shared/semver.js";
 import {
-  fetchSemverTags, resolveBase, commitMessagesSince, countAllCommits,
+  fetchSemverTags, findBaseTag, commitMessagesSince, countAllCommits,
 } from "../shared/github-api.js";
 import { resolveRequireRelease, passthroughVersion, computeQualifiedVersion } from "./lib.js";
 
@@ -112,10 +112,12 @@ async function run() {
       return;
     }
 
-    const latestTag = semverTags[semverTags.length - 1];
-    core.info(`Latest tag : ${latestTag.name} @ ${latestTag.sha}`);
-
-    const baseSha = await resolveBase(octokit, owner, repo, latestTag, headSha, depth, log);
+    // The newest tag on this branch, which is not always the newest tag of the
+    // repository: main can release after a pull request branched off it.
+    const { tag: latestTag, baseSha } = await findBaseTag(
+      octokit, owner, repo, semverTags, headSha, depth, log,
+    );
+    core.info(`Base tag   : ${latestTag.name} @ ${latestTag.sha}`);
 
     const { messages, count: N } = await commitMessagesSince(octokit, owner, repo, baseSha, headSha, log);
     core.info(`Commits in range : ${messages.length} (total: ${N})`);

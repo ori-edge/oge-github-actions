@@ -14,7 +14,7 @@ import {
   Bump, bumpFromCommit, bumpName, parseVersion, applyBump, versionString, sanitizeBranchName,
 } from "../semver.js";
 import {
-  walkFirstParents, isAncestorOf, resolveBase, commitMessagesSince, tagExists,
+  walkFirstParents, isAncestorOf, resolveBase, findBaseTag, commitMessagesSince, tagExists,
 } from "../github-api.js";
 
 // ── Stub octokit ──────────────────────────────────────────────────────────────
@@ -306,6 +306,54 @@ describe("resolveBase", () => {
     });
     const tag = { name: "v2.3.4", sha: "tag-sha" };
     await assert.rejects(() => resolveBase(octokit, O, R, tag, HEAD, 1), /v2\.3\.4/);
+  });
+});
+
+// ── github-api.js: findBaseTag ────────────────────────────────────────────────
+
+describe("findBaseTag", () => {
+  const O = "owner", R = "repo", HEAD = "head-sha";
+
+  it("returns the newest tag when it is on the branch", async () => {
+    const octokit = makeOctokit({ statuses: { "old-sha": "ahead", "new-sha": "ahead" } });
+    const tags = [{ name: "v0.2.0", sha: "old-sha" }, { name: "v0.3.0", sha: "new-sha" }];
+    const found = await findBaseTag(octokit, O, R, tags, HEAD, 0);
+    assert.equal(found.tag.name, "v0.3.0");
+    assert.equal(found.baseSha, "new-sha");
+  });
+
+  it("skips a newer tag that main cut after the branch forked", async () => {
+    const octokit = makeOctokit({ statuses: { "old-sha": "ahead", "new-sha": "diverged" } });
+    const tags = [
+      { name: "v0.2.0", sha: "old-sha" },
+      { name: "0.3.0", sha: "new-sha" },
+      { name: "v0.3.0", sha: "new-sha" },
+    ];
+    const logs = [];
+    const found = await findBaseTag(octokit, O, R, tags, HEAD, 0, (m) => logs.push(m));
+    assert.equal(found.tag.name, "v0.2.0");
+    assert.equal(found.baseSha, "old-sha");
+    assert.ok(logs.some((m) => m.includes("v0.3.0 is not on the current branch")));
+  });
+
+  it("uses the first-parent of an older fishbone tag", async () => {
+    const octokit = makeOctokit({
+      parents: { "new-sha": ["new-parent"], "old-sha": ["old-parent"] },
+      statuses: {
+        "new-sha": "diverged", "new-parent": "diverged",
+        "old-sha": "diverged", "old-parent": "ahead",
+      },
+    });
+    const tags = [{ name: "v1.0.0", sha: "old-sha" }, { name: "v1.1.0", sha: "new-sha" }];
+    const found = await findBaseTag(octokit, O, R, tags, HEAD, 1);
+    assert.equal(found.tag.name, "v1.0.0");
+    assert.equal(found.baseSha, "old-parent");
+  });
+
+  it("throws when no tag is on the branch", async () => {
+    const octokit = makeOctokit({ statuses: { "a-sha": "diverged", "b-sha": "behind" } });
+    const tags = [{ name: "v1.0.0", sha: "a-sha" }, { name: "v1.1.0", sha: "b-sha" }];
+    await assert.rejects(() => findBaseTag(octokit, O, R, tags, HEAD, 0), /No semver tag/);
   });
 });
 
