@@ -43,7 +43,7 @@ function makeOctokit({ parents = {}, statuses = {}, refs = {} } = {}) {
           return { data: { status, total_commits: 2, commits: [
             { commit: { message: "fix: a" } },
             { commit: { message: "feat: b" } },
-          ], commits_url: "" } };
+          ] } };
         },
       },
     },
@@ -379,6 +379,32 @@ describe("commitMessagesSince", () => {
     const octokit = makeOctokit({ statuses: { "base-sha": "behind" } });
     const { messages } = await commitMessagesSince(octokit, O, R, "base-sha", "head-sha");
     assert.equal(messages.length, 0);
+  });
+
+  it("pages through a range of more than 250 commits", async () => {
+    const total = 520;
+    const all = Array.from({ length: total }, (_, i) => ({ commit: { message: `fix: ${i}` } }));
+    const calls = [];
+    const octokit = {
+      rest: {
+        repos: {
+          // Like GitHub: without a page parameter, the comparison holds 250
+          // commits and no URL for the rest.
+          compareCommitsWithBasehead: async (params) => {
+            calls.push(params);
+            const commits = params.page === undefined
+              ? all.slice(0, 250)
+              : all.slice((params.page - 1) * params.per_page, params.page * params.per_page);
+            return { data: { status: "ahead", total_commits: total, commits } };
+          },
+        },
+      },
+    };
+    const { messages, count } = await commitMessagesSince(octokit, O, R, "base-sha", "head-sha");
+    assert.equal(count, total);
+    assert.deepEqual(messages, all.map((c) => c.commit.message));
+    assert.deepEqual(calls.slice(1).map((c) => c.page), [1, 2, 3, 4, 5, 6]);
+    assert.ok(calls.every((c) => c.basehead === "base-sha...head-sha"));
   });
 });
 
