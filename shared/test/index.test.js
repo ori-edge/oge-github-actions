@@ -12,6 +12,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
   Bump, bumpFromCommit, bumpName, parseVersion, applyBump, versionString, sanitizeBranchName,
+  checkTagPrefix,
 } from "../semver.js";
 import {
   walkFirstParents, isAncestorOf, resolveBase, findBaseTag, commitMessagesSince, tagExists,
@@ -135,6 +136,19 @@ describe("parseVersion", () => {
 });
 
 // ── semver.js: applyBump ──────────────────────────────────────────────────────
+
+describe("checkTagPrefix", () => {
+  it("accepts an empty prefix and a prefix that ends in /", () => {
+    checkTagPrefix("");
+    checkTagPrefix("tools/");
+    checkTagPrefix("a/b/");
+  });
+
+  it("rejects a prefix that does not end in /", () => {
+    assert.throws(() => checkTagPrefix("tools"), /tag-prefix must end in "\/", got "tools"/);
+    assert.throws(() => checkTagPrefix("tools-"), /got "tools-"/);
+  });
+});
 
 describe("applyBump", () => {
   const base = { major: 1, minor: 2, patch: 3 };
@@ -458,6 +472,10 @@ describe("fetchSemverTags", () => {
   it("escapes the prefix", async () => {
     const tags = await fetchSemverTags(octokit, O, R, "tool./");
     assert.deepEqual(tags, []);
+  });
+
+  it("rejects a prefix that does not end in /", async () => {
+    await assert.rejects(fetchSemverTags(octokit, O, R, "tools-"), /tag-prefix must end in "\/"/);
   });
 });
 

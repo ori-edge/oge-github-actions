@@ -7,7 +7,8 @@ description: >
 inputs:
   tag-prefix:
     description: >
-      Prefix of the tags to read and to create, e.g. "tools/". With a prefix the
+      Prefix of the tags to read and to create, e.g. "tools/". It must end in
+      "/". With a prefix the
       action creates only <prefix>vX.Y.Z: a bare X.Y.Z would collide with the tags
       of the rest of the repository. Empty creates vX.Y.Z and X.Y.Z.
     required: false

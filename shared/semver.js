@@ -22,6 +22,17 @@ export function bumpName(bump) {
 }
 
 /**
+ * checkTagPrefix throws unless the prefix is empty or ends in "/". parseVersion
+ * drops everything up to the last "/", so a prefix such as "tools-" would make
+ * a tag that the action cannot read back.
+ */
+export function checkTagPrefix(prefix) {
+  if (prefix !== "" && !prefix.endsWith("/")) {
+    throw new Error(`tag-prefix must end in "/", got "${prefix}"`);
+  }
+}
+
+/**
  * parseVersion reads a version from a tag name. It drops a tag prefix that
  * ends in "/", such as "tools/", and then a leading "v".
  */

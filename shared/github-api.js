@@ -6,7 +6,7 @@
  * needing @actions/core in node_modules above the action directory.
  */
 
-import { parseVersion } from "./semver.js";
+import { checkTagPrefix, parseVersion } from "./semver.js";
 
 /**
  * fetchSemverTags returns the semver tags of the repository, oldest first.
@@ -16,6 +16,7 @@ import { parseVersion } from "./semver.js";
  * overlap, so a repository can version a subdirectory on its own.
  */
 export async function fetchSemverTags(octokit, owner, repo, prefix = "") {
+  checkTagPrefix(prefix);
   const tags = await octokit.paginate(octokit.rest.repos.listTags, {
     owner,
     repo,

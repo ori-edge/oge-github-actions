@@ -26,7 +26,7 @@
 import * as core from "@actions/core";
 import { getOctokit } from "@actions/github";
 import {
-  Bump, bumpName, parseVersion, applyBump, versionString,
+  Bump, bumpName, parseVersion, applyBump, versionString, checkTagPrefix,
 } from "../shared/semver.js";
 import {
   fetchSemverTags, resolveBase, commitMessagesSince, countAllCommits, tagExists,
@@ -49,6 +49,7 @@ async function run() {
     if (isNaN(depth) || depth < 0) throw new Error("tag-parent-depth must be a non-negative integer");
 
     const prefix = core.getInput("tag-prefix") || "";
+    checkTagPrefix(prefix);
     const paths = parsePaths(core.getInput("paths"));
     const initialVersion = core.getInput("initial-version") || "";
     if (initialVersion !== "" && !/^\d+\.\d+\.\d+$/.test(initialVersion)) {

@@ -43,7 +43,7 @@ If HEAD is already tagged, outputs the current version and skips tag creation (s
 
 | input           | default | description |
 |-----------------|---------|-------------|
-| tag-prefix      | `""`    | Prefix of the tags to read and create, e.g. `tools/`. With a prefix, the action creates only `<prefix>vX.Y.Z`. Without, it creates `vX.Y.Z` and `X.Y.Z`. |
+| tag-prefix      | `""`    | Prefix of the tags to read and create, e.g. `tools/`. It must end in `/`. With a prefix, the action creates only `<prefix>vX.Y.Z`. Without, it creates `vX.Y.Z` and `X.Y.Z`. |
 | paths           | `""`    | Paths that a commit must touch to count, one for each line or comma. `!` excludes a path. With no commit in scope, the action tags nothing. |
 | initial-version | `""`    | Version of the first tag when no tag with the prefix exists, e.g. `0.1.0`. |
 

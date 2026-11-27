@@ -81,7 +81,7 @@ continues from the same point, and any in-flight PRs merge without conflict.
 | Input | Required | Default | Description |
 |-------|----------|---------|-------------|
 | `tag-parent-depth` | No | `1` | Number of first-parent hops to walk back from the tag's commit to find the ancestor on the main branch. See [Tagging topology](#tagging-topology). |
-| `tag-prefix` | No | `""` | Prefix of the tags to read and to create, e.g. `tools/`. See [Version a subdirectory](#version-a-subdirectory). |
+| `tag-prefix` | No | `""` | Prefix of the tags to read and to create, e.g. `tools/`. It must end in `/`. See [Version a subdirectory](#version-a-subdirectory). |
 | `paths` | No | `""` | Paths that a commit must touch to count, one for each line or comma. A leading `!` excludes a path. Empty counts every commit. |
 | `initial-version` | No | `""` | Version of the first tag, e.g. `0.1.0`, when no tag with the prefix exists. Empty seeds the patch from the commit count. |
 

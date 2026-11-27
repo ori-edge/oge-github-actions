@@ -19,7 +19,8 @@ inputs:
       Prefix of the tags to read and to create, e.g. "tools/". The action then
       reads only the tags <prefix>vX.Y.Z and creates <prefix>vX.Y.Z. Use it to
       version a subdirectory on its own, such as a Go module in tools/, whose
-      tags Go expects as tools/vX.Y.Z. Empty reads vX.Y.Z and X.Y.Z.
+      tags Go expects as tools/vX.Y.Z. The prefix must end in "/". Empty reads
+      vX.Y.Z and X.Y.Z.
     required: false
     default: ""
   paths:
