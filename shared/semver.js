@@ -21,8 +21,12 @@ export function bumpName(bump) {
   return Object.keys(Bump).find((k) => Bump[k] === bump).toLowerCase();
 }
 
+/**
+ * parseVersion reads a version from a tag name. It drops a tag prefix that
+ * ends in "/", such as "tools/", and then a leading "v".
+ */
 export function parseVersion(s) {
-  const [major, minor, patch] = s.replace(/^v/, "").split(".").map(Number);
+  const [major, minor, patch] = s.replace(/^.*\//, "").replace(/^v/, "").split(".").map(Number);
   return { major, minor, patch };
 }
 

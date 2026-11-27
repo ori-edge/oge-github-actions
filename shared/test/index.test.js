@@ -15,6 +15,7 @@ import {
 } from "../semver.js";
 import {
   walkFirstParents, isAncestorOf, resolveBase, findBaseTag, commitMessagesSince, tagExists,
+  fetchSemverTags, parsePaths, touchesPaths, filterCommitsByPaths,
 } from "../github-api.js";
 
 // ── Stub octokit ──────────────────────────────────────────────────────────────
@@ -41,8 +42,8 @@ function makeOctokit({ parents = {}, statuses = {}, refs = {} } = {}) {
           const status = statuses[base];
           if (status === undefined) throw new Error(`No status stub for base SHA: ${base}`);
           return { data: { status, total_commits: 2, commits: [
-            { commit: { message: "fix: a" } },
-            { commit: { message: "feat: b" } },
+            { sha: "c1", commit: { message: "fix: a" } },
+            { sha: "c2", commit: { message: "feat: b" } },
           ] } };
         },
       },
@@ -124,6 +125,12 @@ describe("parseVersion", () => {
   });
   it("parses without v prefix", () => {
     assert.deepEqual(parseVersion("0.0.42"), { major: 0, minor: 0, patch: 42 });
+  });
+  it("parses with a tag prefix", () => {
+    assert.deepEqual(parseVersion("tools/v0.3.1"), { major: 0, minor: 3, patch: 1 });
+  });
+  it("parses with a nested tag prefix", () => {
+    assert.deepEqual(parseVersion("a/b/v2.0.7"), { major: 2, minor: 0, patch: 7 });
   });
 });
 
@@ -364,8 +371,9 @@ describe("commitMessagesSince", () => {
 
   it("returns messages when range is ahead", async () => {
     const octokit = makeOctokit({ statuses: { "base-sha": "ahead" } });
-    const { messages, count } = await commitMessagesSince(octokit, O, R, "base-sha", "head-sha");
+    const { messages, shas, count } = await commitMessagesSince(octokit, O, R, "base-sha", "head-sha");
     assert.equal(messages.length, 2);
+    assert.deepEqual(shas, ["c1", "c2"]);
     assert.equal(count, 2);
   });
 
@@ -383,7 +391,7 @@ describe("commitMessagesSince", () => {
 
   it("pages through a range of more than 250 commits", async () => {
     const total = 520;
-    const all = Array.from({ length: total }, (_, i) => ({ commit: { message: `fix: ${i}` } }));
+    const all = Array.from({ length: total }, (_, i) => ({ sha: `s${i}`, commit: { message: `fix: ${i}` } }));
     const calls = [];
     const octokit = {
       rest: {
@@ -400,9 +408,10 @@ describe("commitMessagesSince", () => {
         },
       },
     };
-    const { messages, count } = await commitMessagesSince(octokit, O, R, "base-sha", "head-sha");
+    const { messages, shas, count } = await commitMessagesSince(octokit, O, R, "base-sha", "head-sha");
     assert.equal(count, total);
     assert.deepEqual(messages, all.map((c) => c.commit.message));
+    assert.deepEqual(shas, all.map((c) => c.sha));
     assert.deepEqual(calls.slice(1).map((c) => c.page), [1, 2, 3, 4, 5, 6]);
     assert.ok(calls.every((c) => c.basehead === "base-sha...head-sha"));
   });
@@ -421,5 +430,89 @@ describe("tagExists", () => {
   it("returns false when ref does not exist", async () => {
     const octokit = makeOctokit();
     assert.equal(await tagExists(octokit, O, R, "v1.2.3"), false);
+  });
+});
+
+// ── github-api.js: fetchSemverTags ────────────────────────────────────────────
+
+describe("fetchSemverTags", () => {
+  const O = "o", R = "r";
+  const names = ["v1.2.0", "1.2.0", "v1.10.0", "tools/v0.1.0", "tools/v0.10.0", "tools/v0.2.0",
+    "tools/0.3.0", "other/v9.9.9", "v2.0.0-rc.1", "latest"];
+  const octokit = {
+    rest: { repos: { listTags: "listTags" } },
+    paginate: async () => names.map((name) => ({ name, commit: { sha: `sha-${name}` } })),
+  };
+
+  it("without a prefix, reads vX.Y.Z and X.Y.Z, oldest first", async () => {
+    const tags = await fetchSemverTags(octokit, O, R);
+    assert.deepEqual(tags.map((t) => t.name), ["v1.2.0", "1.2.0", "v1.10.0"]);
+  });
+
+  it("with a prefix, reads only <prefix>vX.Y.Z, oldest first", async () => {
+    const tags = await fetchSemverTags(octokit, O, R, "tools/");
+    assert.deepEqual(tags.map((t) => t.name), ["tools/v0.1.0", "tools/v0.2.0", "tools/v0.10.0"]);
+    assert.equal(tags[0].sha, "sha-tools/v0.1.0");
+  });
+
+  it("escapes the prefix", async () => {
+    const tags = await fetchSemverTags(octokit, O, R, "tool./");
+    assert.deepEqual(tags, []);
+  });
+});
+
+// ── github-api.js: parsePaths, touchesPaths ───────────────────────────────────
+
+describe("parsePaths", () => {
+  it("splits on lines and commas and drops blanks", () => {
+    assert.deepEqual(parsePaths("tools/\n !docs/ , \n\nREADME.md"), ["tools/", "!docs/", "README.md"]);
+  });
+  it("returns nothing for empty input", () => {
+    assert.deepEqual(parsePaths(""), []);
+    assert.deepEqual(parsePaths(undefined), []);
+  });
+});
+
+describe("touchesPaths", () => {
+  it("includes a file under a directory entry", () => {
+    assert.equal(touchesPaths(["tools/cmd/x/main.go"], ["tools/"]), true);
+    assert.equal(touchesPaths(["tools/cmd/x/main.go"], ["tools"]), true);
+  });
+  it("does not match a sibling with the same start", () => {
+    assert.equal(touchesPaths(["toolsx/a.go"], ["tools/"]), false);
+  });
+  it("matches an exact file", () => {
+    assert.equal(touchesPaths([".github/workflows/tools.yml"], [".github/workflows/tools.yml"]), true);
+  });
+  it("with only excludes, keeps a commit that touches a file outside them", () => {
+    assert.equal(touchesPaths(["tools/a.go", "internal/b.go"], ["!tools/"]), true);
+  });
+  it("with only excludes, drops a commit that touches only excluded files", () => {
+    assert.equal(touchesPaths(["tools/a.go", "tools/b.go"], ["!tools/"]), false);
+  });
+  it("an exclude wins over an include", () => {
+    assert.equal(touchesPaths(["tools/testdata/x"], ["tools/", "!tools/testdata/"]), false);
+    assert.equal(touchesPaths(["tools/testdata/x", "tools/a.go"], ["tools/", "!tools/testdata/"]), true);
+  });
+  it("a commit with no files is out of scope", () => {
+    assert.equal(touchesPaths([], ["!tools/"]), false);
+  });
+});
+
+describe("filterCommitsByPaths", () => {
+  const O = "o", R = "r";
+  const files = {
+    a: [{ filename: "tools/a.go" }],
+    b: [{ filename: "internal/b.go" }],
+    c: [{ filename: "internal/c.go", previous_filename: "tools/c.go" }],
+  };
+  const octokit = {
+    rest: { repos: { getCommit: "getCommit" } },
+    paginate: async (_fn, { ref }, map) => map({ data: { files: files[ref] } }),
+  };
+
+  it("keeps the indexes of the commits in scope", async () => {
+    assert.deepEqual(await filterCommitsByPaths(octokit, O, R, ["a", "b", "c"], ["tools/"]), [0, 2]);
+    assert.deepEqual(await filterCommitsByPaths(octokit, O, R, ["a", "b", "c"], ["!tools/"]), [1, 2]);
   });
 });

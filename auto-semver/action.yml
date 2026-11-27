@@ -14,6 +14,29 @@ inputs:
       main-branch commit, so the default of 1 is correct for that topology.
     required: false
     default: "1"
+  tag-prefix:
+    description: >
+      Prefix of the tags to read and to create, e.g. "tools/". The action then
+      reads only the tags <prefix>vX.Y.Z and creates <prefix>vX.Y.Z. Use it to
+      version a subdirectory on its own, such as a Go module in tools/, whose
+      tags Go expects as tools/vX.Y.Z. Empty reads vX.Y.Z and X.Y.Z.
+    required: false
+    default: ""
+  paths:
+    description: >
+      Paths that a commit must touch to count, one for each line or comma,
+      relative to the repository root. A directory matches each file under it.
+      A leading "!" excludes a path, e.g. "!tools/". When no commit since the
+      last tag touches a path in scope, there is nothing to release. Empty
+      counts every commit.
+    required: false
+    default: ""
+  initial-version:
+    description: >
+      Version of the first tag, e.g. "0.1.0", when no tag with the prefix
+      exists. Empty seeds the patch from the count of all commits.
+    required: false
+    default: ""
 
 outputs:
   version:
@@ -23,8 +46,8 @@ outputs:
       found on the current branch, or no prior tags exist yet).
   tag:
     description: >
-      The computed next tag (e.g. "v1.2.3"), or empty string when there is
-      nothing to release.
+      The computed next tag (e.g. "v1.2.3", or "tools/v1.2.3" with a
+      tag-prefix), or empty string when there is nothing to release.
   bump:
     description: >
       The bump type applied: "major", "minor", or "patch". Empty when there

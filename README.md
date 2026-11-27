@@ -39,6 +39,16 @@ commits since the last tag and creates the tag on HEAD via the GitHub API. No ch
 
 If HEAD is already tagged, outputs the current version and skips tag creation (safe on re-runs).
 
+#### inputs
+
+| input           | default | description |
+|-----------------|---------|-------------|
+| tag-prefix      | `""`    | Prefix of the tags to read and create, e.g. `tools/`. With a prefix, the action creates only `<prefix>vX.Y.Z`. Without, it creates `vX.Y.Z` and `X.Y.Z`. |
+| paths           | `""`    | Paths that a commit must touch to count, one for each line or comma. `!` excludes a path. With no commit in scope, the action tags nothing. |
+| initial-version | `""`    | Version of the first tag when no tag with the prefix exists, e.g. `0.1.0`. |
+
+See [Version a subdirectory](auto-semver/README.md#version-a-subdirectory).
+
 #### env vars (pass as env: on the step)
 
 | var          | description                              |
@@ -50,7 +60,7 @@ If HEAD is already tagged, outputs the current version and skips tag creation (s
 | output  | description                                              |
 |---------|----------------------------------------------------------|
 | version | semver string without leading v, e.g. `1.2.3`           |
-| tag     | empty string when HEAD was already tagged (nothing done) |
+| tag     | created tag, e.g. `v1.2.3` or `tools/v1.2.3`; empty when nothing was tagged |
 
 #### example
 
