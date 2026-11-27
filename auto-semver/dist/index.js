@@ -36279,8 +36279,12 @@ function bumpName(bump) {
   return Object.keys(Bump).find((k) => Bump[k] === bump).toLowerCase();
 }
 
+/**
+ * parseVersion reads a version from a tag name. It drops a tag prefix that
+ * ends in "/", such as "tools/", and then a leading "v".
+ */
 function parseVersion(s) {
-  const [major, minor, patch] = s.replace(/^v/, "").split(".").map(Number);
+  const [major, minor, patch] = s.replace(/^.*\//, "").replace(/^v/, "").split(".").map(Number);
   return { major, minor, patch };
 }
 
@@ -36316,14 +36320,24 @@ function sanitizeBranchName(name) {
 
 
 
-async function fetchSemverTags(octokit, owner, repo) {
+/**
+ * fetchSemverTags returns the semver tags of the repository, oldest first.
+ *
+ * Without a prefix, it returns the tags vX.Y.Z and X.Y.Z. With a prefix, such
+ * as "tools/", it returns only the tags <prefix>vX.Y.Z. The two sets do not
+ * overlap, so a repository can version a subdirectory on its own.
+ */
+async function fetchSemverTags(octokit, owner, repo, prefix = "") {
   const tags = await octokit.paginate(octokit.rest.repos.listTags, {
     owner,
     repo,
     per_page: 100,
   });
 
-  const semver = tags.filter((t) => /^v?\d+\.\d+\.\d+$/.test(t.name));
+  const pattern = prefix === ""
+    ? /^v?\d+\.\d+\.\d+$/
+    : new RegExp(`^${escapeRegExp(prefix)}v\\d+\\.\\d+\\.\\d+$`);
+  const semver = tags.filter((t) => pattern.test(t.name));
 
   semver.sort((a, b) => {
     const av = parseVersion(a.name);
@@ -36332,6 +36346,10 @@ async function fetchSemverTags(octokit, owner, repo) {
   });
 
   return semver.map((t) => ({ name: t.name, sha: t.commit.sha }));
+}
+
+function escapeRegExp(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 async function walkFirstParents(octokit, owner, repo, sha, depth) {
@@ -36421,17 +36439,22 @@ async function commitMessagesSince(octokit, owner, repo, baseSha, headSha, log =
   const { status, total_commits, commits } = comparison.data;
 
   if (status === "behind" || status === "identical") {
-    return { messages: [], count: 0 };
+    return { messages: [], shas: [], count: 0 };
   }
 
   if (commits.length === total_commits) {
-    return { messages: commits.map((c) => c.commit.message), count: total_commits };
+    return {
+      messages: commits.map((c) => c.commit.message),
+      shas: commits.map((c) => c.sha),
+      count: total_commits,
+    };
   }
 
   // The comparison has no URL for its commits. Page through the comparison
   // itself: with a page parameter, it returns every commit of the range.
   log(`Range has ${total_commits} commits (>250) — paginating`);
   const messages = [];
+  const shas = [];
   for (let page = 1; messages.length < total_commits; page++) {
     const { data } = await octokit.rest.repos.compareCommitsWithBasehead({
       owner,
@@ -36441,9 +36464,72 @@ async function commitMessagesSince(octokit, owner, repo, baseSha, headSha, log =
       page,
     });
     if (data.commits.length === 0) break;
-    for (const c of data.commits) messages.push(c.commit.message);
+    for (const c of data.commits) {
+      messages.push(c.commit.message);
+      shas.push(c.sha);
+    }
   }
-  return { messages, count: total_commits };
+  return { messages, shas, count: total_commits };
+}
+
+/**
+ * parsePaths reads the paths input: one entry for each line or comma. An entry
+ * that starts with "!" excludes a path.
+ */
+function parsePaths(input) {
+  return (input || "")
+    .split(/[\n,]/)
+    .map((p) => p.trim())
+    .filter((p) => p !== "");
+}
+
+/**
+ * touchesPaths reports whether a commit that changed the given files is in
+ * scope of the path entries.
+ *
+ * An entry is a file or a directory, relative to the repository root. A
+ * directory matches each file under it. An entry with a leading "!" excludes
+ * its files. A file is in scope when it matches an include entry, or when no
+ * include entry exists, and it matches no exclude entry. The commit is in scope
+ * when one of its files is in scope. A commit with no files is out of scope.
+ */
+function touchesPaths(files, paths) {
+  const includes = paths.filter((p) => !p.startsWith("!"));
+  const excludes = paths.filter((p) => p.startsWith("!")).map((p) => p.slice(1));
+  const under = (file, entry) => {
+    const dir = entry.replace(/\/+$/, "");
+    return file === dir || file.startsWith(`${dir}/`);
+  };
+  return files.some((f) =>
+    (includes.length === 0 || includes.some((e) => under(f, e))) &&
+    !excludes.some((e) => under(f, e)));
+}
+
+/**
+ * filterCommitsByPaths returns the indexes of the commits whose files are in
+ * scope of the path entries. It reads the files of each commit, so keep the
+ * range short: one release reads the commits since the last tag.
+ */
+async function filterCommitsByPaths(octokit, owner, repo, shas, paths, log = () => {}) {
+  const kept = [];
+  for (let i = 0; i < shas.length; i++) {
+    const files = await commitFiles(octokit, owner, repo, shas[i]);
+    if (touchesPaths(files, paths)) {
+      kept.push(i);
+    } else {
+      log(`Commit ${shas[i]} touches no path in scope — skipped`);
+    }
+  }
+  return kept;
+}
+
+async function commitFiles(octokit, owner, repo, sha) {
+  const files = await octokit.paginate(
+    octokit.rest.repos.getCommit,
+    { owner, repo, ref: sha, per_page: 100 },
+    (resp) => resp.data.files || [],
+  );
+  return files.flatMap((f) => (f.previous_filename ? [f.filename, f.previous_filename] : [f.filename]));
 }
 
 async function countAllCommits(octokit, owner, repo, headSha) {
@@ -36495,6 +36581,9 @@ function computeBump(messages) {
  *   tag-parent-depth  — how many parents to walk back from the tag's commit
  *                       to find the ancestor that lives on the main branch.
  *                       Default: 1 (fishbone topology). Use 0 for direct-main.
+ *   tag-prefix        — prefix of the tags to read and create, e.g. "tools/".
+ *   paths             — paths a commit must touch to count; "!" excludes.
+ *   initial-version   — version of the first tag when no tag exists.
  *
  * Outputs: version, tag, bump (all empty when nothing to release)
  */
@@ -36519,14 +36608,23 @@ async function run() {
     const depth = parseInt(getInput("tag-parent-depth") || "1", 10);
     if (isNaN(depth) || depth < 0) throw new Error("tag-parent-depth must be a non-negative integer");
 
+    const prefix = getInput("tag-prefix") || "";
+    const paths = parsePaths(getInput("paths"));
+    const initialVersion = getInput("initial-version") || "";
+    if (initialVersion !== "" && !/^\d+\.\d+\.\d+$/.test(initialVersion)) {
+      throw new Error(`initial-version must be X.Y.Z, got "${initialVersion}"`);
+    }
+
     const [owner, repo] = repository.split("/");
     const octokit = getOctokit(token);
     const log = (msg) => info(msg);
 
     info(`HEAD SHA         : ${headSha}`);
     info(`tag-parent-depth : ${depth}`);
+    if (prefix !== "") info(`tag-prefix       : ${prefix}`);
+    if (paths.length > 0) info(`paths            : ${paths.join(", ")}`);
 
-    const semverTags = await fetchSemverTags(octokit, owner, repo);
+    const semverTags = await fetchSemverTags(octokit, owner, repo, prefix);
 
     // If HEAD is already tagged with a semver tag, return that version unchanged.
     // Empty `tag` output tells callers (e.g. tag-semver) that no new tag is needed.
@@ -36539,6 +36637,22 @@ async function run() {
       return;
     }
 
+    if (semverTags.length === 0 && initialVersion !== "") {
+      const tag = `${prefix}v${initialVersion}`;
+      info(`No prior semver tag found — using initial-version: ${tag}`);
+
+      if (await tagExists(octokit, owner, repo, tag)) {
+        info(`Tag ${tag} already exists — nothing to do.`);
+        emitEmpty();
+        return;
+      }
+
+      setOutput("version", initialVersion);
+      setOutput("tag", tag);
+      setOutput("bump", "");
+      return;
+    }
+
     if (semverTags.length === 0) {
       info("No prior semver tag found — counting all commits to seed patch");
       const count = await countAllCommits(octokit, owner, repo, headSha);
@@ -36546,7 +36660,7 @@ async function run() {
       info(`Seeding patch from commit count: ${count}`);
 
       const nextVersion = applyBump(baseline, Bump.PATCH);
-      const tag = `v${versionString(nextVersion)}`;
+      const tag = `${prefix}v${versionString(nextVersion)}`;
       info(`New tag: ${tag}`);
 
       if (await tagExists(octokit, owner, repo, tag)) {
@@ -36569,13 +36683,24 @@ async function run() {
 
     info(`Baseline version : ${versionString(baseline)}`);
 
-    const { messages } = await commitMessagesSince(octokit, owner, repo, baseSha, headSha, log);
+    let { messages, shas } = await commitMessagesSince(octokit, owner, repo, baseSha, headSha, log);
     info(`Commits in range : ${messages.length}`);
+
+    if (paths.length > 0) {
+      const kept = await filterCommitsByPaths(octokit, owner, repo, shas, paths, log);
+      messages = kept.map((i) => messages[i]);
+      info(`Commits in paths : ${messages.length}`);
+      if (messages.length === 0) {
+        info("No commit since the last tag touches the paths — nothing to release.");
+        emitEmpty();
+        return;
+      }
+    }
 
     const bump = computeBump(messages);
 
     const nextVersion = applyBump(baseline, bump);
-    const tag = `v${versionString(nextVersion)}`;
+    const tag = `${prefix}v${versionString(nextVersion)}`;
 
     info(`Bump type        : ${bumpName(bump)}`);
     info(`New version      : ${versionString(nextVersion)}`);
