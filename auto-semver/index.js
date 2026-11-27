@@ -16,6 +16,9 @@
  *   tag-parent-depth  — how many parents to walk back from the tag's commit
  *                       to find the ancestor that lives on the main branch.
  *                       Default: 1 (fishbone topology). Use 0 for direct-main.
+ *   tag-prefix        — prefix of the tags to read and create, e.g. "tools/".
+ *   paths             — paths a commit must touch to count; "!" excludes.
+ *   initial-version   — version of the first tag when no tag exists.
  *
  * Outputs: version, tag, bump (all empty when nothing to release)
  */
@@ -23,10 +26,11 @@
 import * as core from "@actions/core";
 import { getOctokit } from "@actions/github";
 import {
-  Bump, bumpName, parseVersion, applyBump, versionString,
+  Bump, bumpName, parseVersion, applyBump, versionString, checkTagPrefix,
 } from "../shared/semver.js";
 import {
   fetchSemverTags, resolveBase, commitMessagesSince, countAllCommits, tagExists,
+  parsePaths, filterCommitsByPaths,
 } from "../shared/github-api.js";
 import { computeBump } from "./lib.js";
 
@@ -44,14 +48,24 @@ async function run() {
     const depth = parseInt(core.getInput("tag-parent-depth") || "1", 10);
     if (isNaN(depth) || depth < 0) throw new Error("tag-parent-depth must be a non-negative integer");
 
+    const prefix = core.getInput("tag-prefix") || "";
+    checkTagPrefix(prefix);
+    const paths = parsePaths(core.getInput("paths"));
+    const initialVersion = core.getInput("initial-version") || "";
+    if (initialVersion !== "" && !/^\d+\.\d+\.\d+$/.test(initialVersion)) {
+      throw new Error(`initial-version must be X.Y.Z, got "${initialVersion}"`);
+    }
+
     const [owner, repo] = repository.split("/");
     const octokit = getOctokit(token);
     const log = (msg) => core.info(msg);
 
     core.info(`HEAD SHA         : ${headSha}`);
     core.info(`tag-parent-depth : ${depth}`);
+    if (prefix !== "") core.info(`tag-prefix       : ${prefix}`);
+    if (paths.length > 0) core.info(`paths            : ${paths.join(", ")}`);
 
-    const semverTags = await fetchSemverTags(octokit, owner, repo);
+    const semverTags = await fetchSemverTags(octokit, owner, repo, prefix);
 
     // If HEAD is already tagged with a semver tag, return that version unchanged.
     // Empty `tag` output tells callers (e.g. tag-semver) that no new tag is needed.
@@ -64,6 +78,22 @@ async function run() {
       return;
     }
 
+    if (semverTags.length === 0 && initialVersion !== "") {
+      const tag = `${prefix}v${initialVersion}`;
+      core.info(`No prior semver tag found — using initial-version: ${tag}`);
+
+      if (await tagExists(octokit, owner, repo, tag)) {
+        core.info(`Tag ${tag} already exists — nothing to do.`);
+        emitEmpty();
+        return;
+      }
+
+      core.setOutput("version", initialVersion);
+      core.setOutput("tag", tag);
+      core.setOutput("bump", "");
+      return;
+    }
+
     if (semverTags.length === 0) {
       core.info("No prior semver tag found — counting all commits to seed patch");
       const count = await countAllCommits(octokit, owner, repo, headSha);
@@ -71,7 +101,7 @@ async function run() {
       core.info(`Seeding patch from commit count: ${count}`);
 
       const nextVersion = applyBump(baseline, Bump.PATCH);
-      const tag = `v${versionString(nextVersion)}`;
+      const tag = `${prefix}v${versionString(nextVersion)}`;
       core.info(`New tag: ${tag}`);
 
       if (await tagExists(octokit, owner, repo, tag)) {
@@ -94,13 +124,24 @@ async function run() {
 
     core.info(`Baseline version : ${versionString(baseline)}`);
 
-    const { messages } = await commitMessagesSince(octokit, owner, repo, baseSha, headSha, log);
+    let { messages, shas } = await commitMessagesSince(octokit, owner, repo, baseSha, headSha, log);
     core.info(`Commits in range : ${messages.length}`);
+
+    if (paths.length > 0) {
+      const kept = await filterCommitsByPaths(octokit, owner, repo, shas, paths, log);
+      messages = kept.map((i) => messages[i]);
+      core.info(`Commits in paths : ${messages.length}`);
+      if (messages.length === 0) {
+        core.info("No commit since the last tag touches the paths — nothing to release.");
+        emitEmpty();
+        return;
+      }
+    }
 
     const bump = computeBump(messages);
 
     const nextVersion = applyBump(baseline, bump);
-    const tag = `v${versionString(nextVersion)}`;
+    const tag = `${prefix}v${versionString(nextVersion)}`;
 
     core.info(`Bump type        : ${bumpName(bump)}`);
     core.info(`New version      : ${versionString(nextVersion)}`);

@@ -81,6 +81,9 @@ continues from the same point, and any in-flight PRs merge without conflict.
 | Input | Required | Default | Description |
 |-------|----------|---------|-------------|
 | `tag-parent-depth` | No | `1` | Number of first-parent hops to walk back from the tag's commit to find the ancestor on the main branch. See [Tagging topology](#tagging-topology). |
+| `tag-prefix` | No | `""` | Prefix of the tags to read and to create, e.g. `tools/`. It must end in `/`. See [Version a subdirectory](#version-a-subdirectory). |
+| `paths` | No | `""` | Paths that a commit must touch to count, one for each line or comma. A leading `!` excludes a path. Empty counts every commit. |
+| `initial-version` | No | `""` | Version of the first tag, e.g. `0.1.0`, when no tag with the prefix exists. Empty seeds the patch from the commit count. |
 
 ## Outputs
 
@@ -89,7 +92,7 @@ All outputs are empty strings when there is nothing to release.
 | Output | Description |
 |--------|-------------|
 | `version` | Next version string, e.g. `1.2.3` |
-| `tag` | Next tag, e.g. `v1.2.3` |
+| `tag` | Next tag, e.g. `v1.2.3`, or `tools/v1.2.3` with a `tag-prefix` |
 | `bump` | Bump type applied: `major`, `minor`, or `patch` |
 
 ## Bump rules
@@ -190,6 +193,32 @@ the action exits cleanly. Re-running the same workflow twice is safe.
 When no prior semver tag exists, the patch component is seeded from the total
 commit count on the branch, so the first release reflects accumulated history
 rather than starting from `0.0.1`.
+
+Set `initial-version` to start from a fixed version instead. A new
+`tag-prefix` in an old repository needs it: the commit count of the whole
+repository is not a useful patch number.
+
+## Version a subdirectory
+
+One repository can hold more than one versioned part, for example a Go module
+in `tools/` beside the main product. Go expects the tags of that module as
+`tools/vX.Y.Z`.
+
+| Input | Main product | `tools/` module |
+|-------|--------------|-----------------|
+| `tag-prefix` | `""` | `tools/` |
+| `paths` | `!tools/` | `tools/` |
+| `initial-version` | `""` | `0.1.0` |
+
+- Without a prefix, the action reads the tags `vX.Y.Z` and `X.Y.Z`. It never
+  reads a prefixed tag.
+- With a prefix, the action reads and creates only `<prefix>vX.Y.Z`.
+- With `paths`, a commit counts only when one of its files is in scope. A file
+  is in scope when it matches an include entry, or no include entry exists,
+  and it matches no exclude entry. When no commit counts, there is nothing to
+  release and every output is empty.
+- The action reads the files of each commit since the last tag, one API call
+  for each commit.
 
 ## Development
 
